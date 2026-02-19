@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import db from './config/database.js';
+import authRoutes from './routes/auth.routes.js';
 
 dotenv.config();
 
@@ -30,6 +31,18 @@ app.get('/api/health', async (req, res) => {
       error: error.message 
     });
   }
+});
+
+// ESTA LÍNEA ES CRÍTICA
+app.use('/api/auth', authRoutes);
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Ruta no encontrada' });
+});
+
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Error interno del servidor' });
 });
 
 app.listen(PORT, () => {
