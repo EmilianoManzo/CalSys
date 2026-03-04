@@ -10,7 +10,11 @@ function ProtectedRoute({ children, allowedRoles }) {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl">Cargando...</div>
+      </div>
+    );
   }
 
   if (!user) {
@@ -24,41 +28,60 @@ function ProtectedRoute({ children, allowedRoles }) {
   return children;
 }
 
+function AppContent() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl">Cargando...</div>
+      </div>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={
+        user ? <Navigate to={`/${user.role === 'student' ? 'alumno' : user.role}`} replace /> : <Login />
+      } />
+      
+      <Route path="/admin" element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <AdminDashboard />
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/director" element={
+        <ProtectedRoute allowedRoles={['director']}>
+          <DirectorDashboard />
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/maestro" element={
+        <ProtectedRoute allowedRoles={['maestro']}>
+          <MaestroDashboard />
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/alumno" element={
+        <ProtectedRoute allowedRoles={['student']}>
+          <AlumnoDashboard />
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+}
+
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          
-          <Route path="/admin" element={
-            <ProtectedRoute allowedRoles={['admin']}>
-              <AdminDashboard />
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/director" element={
-            <ProtectedRoute allowedRoles={['director']}>
-              <DirectorDashboard />
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/maestro" element={
-            <ProtectedRoute allowedRoles={['maestro']}>
-              <MaestroDashboard />
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/alumno" element={
-            <ProtectedRoute allowedRoles={['student']}>
-              <AlumnoDashboard />
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

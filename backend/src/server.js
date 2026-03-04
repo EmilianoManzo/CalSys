@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import db from './config/database.js';
 import authRoutes from './routes/auth.routes.js';
+import gradesRoutes from './routes/grades.routes.js';
+import columnsRoutes from './routes/columns.routes.js';
 
 dotenv.config();
 
@@ -33,13 +35,17 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// ESTA LÍNEA ES CRÍTICA
+// Rutas
 app.use('/api/auth', authRoutes);
+app.use('/api/grades', gradesRoutes);
+app.use('/api/columns', columnsRoutes);
 
+// 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada' });
 });
 
+// Error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Error interno del servidor' });
