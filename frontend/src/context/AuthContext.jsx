@@ -34,6 +34,7 @@ export function AuthProvider({ children }) {
   const login = async (credentials, isStudent = false) => {
     const endpoint = isStudent ? '/auth/login-student' : '/auth/login';
     console.log('Llamando a:', endpoint);
+    console.log('Credenciales:', credentials);
     
     const response = await api.post(endpoint, credentials);
     console.log('Respuesta del servidor:', response.data);
@@ -56,7 +57,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

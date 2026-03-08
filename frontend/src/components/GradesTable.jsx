@@ -53,9 +53,30 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
       
       const tableData = response.data.grades.map(g => {
         const row = [g.matricula, g.nombre];
+        
+        let calificacionFinal = 0;
+        let pesoTotal = 0;
+        
+        // Agregar valores de columnas personalizadas
         cols.forEach(col => {
-          row.push(g[`col_${col.id}`] || null);
+          const valor = parseFloat(g[`col_${col.id}`]) || null;
+          row.push(valor);
+          
+          // Calcular calificación final si es numérica
+          if (col.column_type === 'numeric' && valor !== null) {
+            const peso = parseFloat(col.weight) || 0;
+            const maxValue = parseFloat(col.max_value) || 10;
+            
+            // Normalizar a escala de 10 y aplicar peso
+            const valorNormalizado = (valor / maxValue) * 10;
+            calificacionFinal += (valorNormalizado * peso) / 100;
+            pesoTotal += peso;
+          }
         });
+        
+        // Agregar calificación final (solo si hay peso configurado)
+        row.push(pesoTotal > 0 ? parseFloat(calificacionFinal.toFixed(2)) : null);
+        
         return row;
       });
 
@@ -94,8 +115,13 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
       const tableData = hot.getData();
       
       const values = [];
+      const finalGrades = [];
+      
       tableData.forEach(row => {
         const matricula = row[0];
+        const calificacionFinal = row[columns.length + 2];
+        
+        // Guardar valores de columnas personalizadas
         columns.forEach((col, index) => {
           const value = row[index + 2];
           if (value !== null && value !== undefined && value !== '') {
@@ -106,10 +132,19 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
             });
           }
         });
+        
+        // Guardar calificación final
+        if (calificacionFinal !== null && calificacionFinal !== undefined) {
+          finalGrades.push({
+            matricula,
+            finalGrade: calificacionFinal
+          });
+        }
       });
 
       await api.post('/columns/save-custom', {
         values,
+        finalGrades,
         semester,
         subject,
         group,
@@ -128,10 +163,11 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
 
   const buildColumns = () => {
     const cols = [
-      { data: 0, title: 'Matricula', readOnly: true, width: 100 },
+      { data: 0, title: 'Matricula', readOnly: true, width: 100, className: 'htCenter htMiddle' },
       { data: 1, title: 'Nombre', readOnly: true, width: 200 }
     ];
 
+    // Agregar columnas personalizadas
     columns.forEach((col, index) => {
       cols.push({
         data: index + 2,
@@ -142,7 +178,59 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
       });
     });
 
+    // Agregar columna de Calificación Final (calculada)
+    cols.push({
+      data: columns.length + 2,
+      title: 'CALIFICACION FINAL',
+      type: 'numeric',
+      numericFormat: { pattern: '0.00' },
+      readOnly: true,
+      width: 150,
+      className: 'htCenter htMiddle'
+    });
+
     return cols;
+  };
+
+  const afterChange = (changes, source) => {
+    if (!changes || source === 'loadData') return;
+    
+    const hot = hotRef.current?.hotInstance;
+    if (!hot) return;
+
+    changes.forEach(([row, prop, oldValue, newValue]) => {
+      // Si cambió una columna numérica, recalcular final
+      if (prop >= 2 && prop < columns.length + 2) {
+        const colIndex = prop - 2;
+        const column = columns[colIndex];
+        
+        if (column?.column_type === 'numeric') {
+          recalcularFinal(hot, row);
+        }
+      }
+    });
+  };
+
+  const recalcularFinal = (hot, rowIndex) => {
+    let calificacionFinal = 0;
+    let pesoTotal = 0;
+    
+    columns.forEach((col, index) => {
+      if (col.column_type === 'numeric') {
+        const valor = parseFloat(hot.getDataAtCell(rowIndex, index + 2)) || 0;
+        const peso = parseFloat(col.weight) || 0;
+        const maxValue = parseFloat(col.max_value) || 10;
+        
+        if (valor > 0) {
+          const valorNormalizado = (valor / maxValue) * 10;
+          calificacionFinal += (valorNormalizado * peso) / 100;
+          pesoTotal += peso;
+        }
+      }
+    });
+    
+    const finalValue = pesoTotal > 0 ? parseFloat(calificacionFinal.toFixed(2)) : null;
+    hot.setDataAtCell(rowIndex, columns.length + 2, finalValue, 'thisChange');
   };
 
   if (showConfig) {
@@ -178,14 +266,14 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
             onClick={() => setShowConfig(true)}
             className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
           >
-            ⚙️ Configurar Columnas
+            Configurar Columnas
           </button>
           <button
             onClick={handleSaveGrades}
             disabled={saving}
             className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
           >
-            {saving ? 'Guardando...' : '💾 Guardar Calificaciones'}
+            {saving ? 'Guardando...' : 'Guardar Calificaciones'}
           </button>
         </div>
       </div>
@@ -214,20 +302,62 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
             stretchH="all"
             contextMenu={true}
             manualColumnResize={true}
+            afterChange={afterChange}
+            cells={(row, col) => {
+              const cellProperties = {};
+              
+              // Estilo para columna final
+              if (col === columns.length + 2) {
+                cellProperties.className = 'htCenter htMiddle';
+                cellProperties.renderer = function(instance, td, row, col, prop, value) {
+                  td.innerHTML = value !== null ? value.toFixed(2) : '';
+                  td.style.backgroundColor = '#EFF6FF';
+                  td.style.fontWeight = 'bold';
+                  td.style.textAlign = 'center';
+                  td.style.fontSize = '14px';
+                  
+                  if (value !== null) {
+                    if (value >= 9) {
+                      td.style.color = '#059669';
+                      td.style.backgroundColor = '#D1FAE5';
+                    } else if (value >= 6) {
+                      td.style.color = '#2563EB';
+                      td.style.backgroundColor = '#DBEAFE';
+                    } else {
+                      td.style.color = '#DC2626';
+                      td.style.backgroundColor = '#FEE2E2';
+                    }
+                  }
+                  
+                  return td;
+                };
+              }
+              
+              return cellProperties;
+            }}
           />
         </div>
       )}
 
       {columns.length > 0 && (
         <div className="mt-4 p-4 bg-gray-50 rounded text-sm">
-          <p className="font-semibold mb-2">📊 Columnas configuradas:</p>
+          <p className="font-semibold mb-2">Columnas configuradas:</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {columns.map(col => (
               <div key={col.id} className="bg-white p-2 rounded border">
                 <span className="font-medium">{col.column_name}</span>
-                <span className="text-gray-600 ml-2">({col.weight}%)</span>
+                {col.column_type === 'numeric' && (
+                  <span className="text-gray-600 ml-2">({col.weight}%)</span>
+                )}
+                {col.column_type === 'text' && (
+                  <span className="text-gray-400 ml-2 text-xs">(texto)</span>
+                )}
               </div>
             ))}
+            <div className="bg-blue-100 p-2 rounded border border-blue-300">
+              <span className="font-bold text-blue-900">CALIFICACION FINAL</span>
+              <span className="text-blue-700 ml-2">(calculada)</span>
+            </div>
           </div>
         </div>
       )}
