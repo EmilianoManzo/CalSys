@@ -1,43 +1,71 @@
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import api from '../api/axios';
+import StudentsManager from '../components/admin/StudentsManager';
+import UsersManager from '../components/admin/UsersManager';
+import GradesViewer from '../components/admin/GradesViewer';
+import Stats from '../components/admin/Stats';
 
 function AdminDashboard() {
   const { user, logout } = useAuth();
+  const [activeTab, setActiveTab] = useState('stats');
+
+  const tabs = [
+    { id: 'stats', name: 'Estadísticas', icon: '📊' },
+    { id: 'grades', name: 'Calificaciones', icon: '📝' },
+    { id: 'students', name: 'Alumnos', icon: '👨‍🎓' },
+    { id: 'users', name: 'Usuarios', icon: '👥' }
+  ];
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-lg">
+      {/* Header */}
+      <nav className="bg-gradient-to-r from-purple-600 to-purple-700 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-blue-600">📊 Calsys - Admin</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-700">Hola, {user?.firstName}</span>
-            <button
-              onClick={logout}
-              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-            >
-              Cerrar Sesión
-            </button>
+          <div>
+            <h1 className="text-2xl font-bold text-white">
+              {user?.role === 'admin' ? '⚙️ Panel de Administración' : '👔 Panel de Director'}
+            </h1>
+            <p className="text-purple-100 text-sm">
+              {user?.firstName} {user?.lastName} - {user?.role === 'admin' ? 'Administrador' : 'Director'}
+            </p>
           </div>
+          <button 
+            onClick={logout} 
+            className="bg-white text-purple-600 px-4 py-2 rounded-lg hover:bg-purple-50 font-semibold"
+          >
+            Cerrar Sesión
+          </button>
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-2xl font-bold mb-4">Panel de Administrador</h2>
-          <p className="text-gray-600">Bienvenido al sistema Calsys</p>
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-blue-50 p-6 rounded-lg">
-              <h3 className="font-bold text-lg mb-2">Gestión de Alumnos</h3>
-              <p className="text-sm text-gray-600">Crear, editar y gestionar alumnos</p>
-            </div>
-            <div className="bg-green-50 p-6 rounded-lg">
-              <h3 className="font-bold text-lg mb-2">Gestión de Usuarios</h3>
-              <p className="text-sm text-gray-600">Administrar maestros y directores</p>
-            </div>
-            <div className="bg-purple-50 p-6 rounded-lg">
-              <h3 className="font-bold text-lg mb-2">Reportes</h3>
-              <p className="text-sm text-gray-600">Ver estadísticas del sistema</p>
-            </div>
+      {/* Tabs */}
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="bg-white rounded-lg shadow-lg mb-6">
+          <div className="flex border-b">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 py-4 px-6 font-semibold transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-purple-50 text-purple-700 border-b-2 border-purple-600'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <span className="mr-2">{tab.icon}</span>
+                {tab.name}
+              </button>
+            ))}
           </div>
+        </div>
+
+        {/* Content */}
+        <div>
+          {activeTab === 'stats' && <Stats />}
+          {activeTab === 'grades' && <GradesViewer />}
+          {activeTab === 'students' && <StudentsManager />}
+          {activeTab === 'users' && <UsersManager />}
         </div>
       </div>
     </div>
