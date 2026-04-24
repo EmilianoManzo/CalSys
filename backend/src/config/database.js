@@ -13,9 +13,9 @@ const pool = mysql.createPool({
 
 pool.getConnection()
   .then(c => { 
-    console.log('✅ MySQL conectado'); 
+    console.log('MySQL conectado'); 
     c.release(); 
   })
-  .catch(e => console.error('❌ MySQL:', e.message));
+  .catch(e => console.error('MySQL:', e.message));
 
 export default pool;
