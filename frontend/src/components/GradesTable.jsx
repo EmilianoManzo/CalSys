@@ -7,7 +7,7 @@ import ColumnConfig from './ColumnConfig';
 
 registerAllModules();
 
-function GradesTable({ semester, subject, group, teacherId, teacherName }) {
+function GradesTable({ semester, subject, group, teacherId }) {
   const [data, setData] = useState([]);
   const [columns, setColumns] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -16,9 +16,7 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
   const hotRef = useRef(null);
 
   useEffect(() => {
-    if (semester && subject && teacherId) {
-      loadConfig();
-    }
+    if (semester && subject && teacherId) loadConfig();
   }, [semester, subject, group, teacherId]);
 
   const loadConfig = async () => {
@@ -26,20 +24,16 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
     try {
       const params = { teacherId, semester, subject };
       if (group) params.group = group;
-
       const response = await api.get('/columns/config', { params });
-      
       if (response.data.columns.length === 0) {
         setShowConfig(true);
         setLoading(false);
         return;
       }
-
       setColumns(response.data.columns);
       await loadGrades(response.data.columns);
-
     } catch (error) {
-      console.error('Error cargando configuracion:', error);
+      console.error(error);
       setLoading(false);
     }
   };
@@ -48,41 +42,33 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
     try {
       const params = { teacherId, semester, subject };
       if (group) params.group = group;
-
       const response = await api.get('/columns/with-custom', { params });
-      
       const tableData = response.data.grades.map(g => {
-        const row = [g.matricula, g.nombre];
-        
-        let calificacionFinal = 0;
-        let pesoTotal = 0;
-        
-        // Agregar valores de columnas personalizadas
+        // Columnas fijas: Matrícula, Nombre, Parcial1, Parcial2, Parcial3, Promedio (solo lectura), Ordinario
+        const row = [
+          g.matricula,
+          g.nombre,
+          g.parcial_1 !== null ? parseFloat(g.parcial_1).toFixed(2) : '',
+          g.parcial_2 !== null ? parseFloat(g.parcial_2).toFixed(2) : '',
+          g.parcial_3 !== null ? parseFloat(g.parcial_3).toFixed(2) : '',
+          g.promedio_parciales !== null ? parseFloat(g.promedio_parciales).toFixed(2) : '',
+          g.ordinario !== null ? parseFloat(g.ordinario).toFixed(2) : ''
+        ];
+        // Columnas personalizadas (no especiales)
         cols.forEach(col => {
-          const valor = parseFloat(g[`col_${col.id}`]) || null;
-          row.push(valor);
-          
-          // Calcular calificación final si es numérica
-          if (col.column_type === 'numeric' && valor !== null) {
-            const peso = parseFloat(col.weight) || 0;
-            const maxValue = parseFloat(col.max_value) || 10;
-            
-            // Normalizar a escala de 10 y aplicar peso
-            const valorNormalizado = (valor / maxValue) * 10;
-            calificacionFinal += (valorNormalizado * peso) / 100;
-            pesoTotal += peso;
+          if (!col.is_special) {
+            const val = g[`col_${col.id}`];
+            row.push(val !== null ? parseFloat(val).toFixed(2) : '');
           }
         });
-        
-        // Agregar calificación final (solo si hay peso configurado)
-        row.push(pesoTotal > 0 ? parseFloat(calificacionFinal.toFixed(2)) : null);
-        
+        // Calificación final y estado
+        row.push(g.final_grade !== null ? parseFloat(g.final_grade).toFixed(2) : '');
+        row.push(g.status === 'passed' ? 'Aprobado' : g.status === 'failed' ? 'Reprobado' : 'En Progreso');
         return row;
       });
-
       setData(tableData);
     } catch (error) {
-      console.error('Error cargando calificaciones:', error);
+      console.error(error);
       alert('Error al cargar calificaciones');
     } finally {
       setLoading(false);
@@ -91,20 +77,12 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
 
   const handleSaveConfig = async (newColumns) => {
     try {
-      await api.post('/columns/config', {
-        teacherId,
-        semester,
-        subject,
-        group,
-        columns: newColumns
-      });
-
+      await api.post('/columns/config', { teacherId, semester, subject, group, columns: newColumns });
       setShowConfig(false);
       loadConfig();
-      alert('Configuracion guardada exitosamente');
+      alert('Configuración guardada');
     } catch (error) {
-      console.error('Error guardando configuracion:', error);
-      alert('Error al guardar configuracion');
+      alert('Error al guardar configuración');
     }
   };
 
@@ -113,48 +91,43 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
     try {
       const hot = hotRef.current.hotInstance;
       const tableData = hot.getData();
-      
       const values = [];
-      const finalGrades = [];
-      
+      const parciales = {};
+      const ordinarios = {};
+
+      const fixedColsCount = 8; // matricula, nombre, p1, p2, p3, promedio, ordinario, final, estado -> pero la final y estado están al final
+      // En realidad las columnas fijas son: 0 mat, 1 nom, 2 p1, 3 p2, 4 p3, 5 prom (readonly), 6 ordinario
+      // Luego vienen las personalizables, luego final y estado.
+      const normalColumns = columns.filter(c => !c.is_special);
+      const personalStartIndex = 7; // después de ordinario
+
       tableData.forEach(row => {
         const matricula = row[0];
-        const calificacionFinal = row[columns.length + 2];
-        
-        // Guardar valores de columnas personalizadas
-        columns.forEach((col, index) => {
-          const value = row[index + 2];
-          if (value !== null && value !== undefined && value !== '') {
-            values.push({
-              matricula,
-              columnId: col.id,
-              value: value.toString()
-            });
+        // Parciales
+        const p1 = row[2] !== '' ? parseFloat(row[2]) : null;
+        const p2 = row[3] !== '' ? parseFloat(row[3]) : null;
+        const p3 = row[4] !== '' ? parseFloat(row[4]) : null;
+        const ord = row[6] !== '' ? parseFloat(row[6]) : null;
+        if (p1 !== null || p2 !== null || p3 !== null) {
+          parciales[matricula] = { parcial_1: p1, parcial_2: p2, parcial_3: p3 };
+        }
+        if (ord !== null) {
+          ordinarios[matricula] = ord;
+        }
+        // Columnas personalizadas
+        normalColumns.forEach((col, idx) => {
+          const val = row[personalStartIndex + idx];
+          if (val !== '' && !isNaN(val)) {
+            values.push({ matricula, columnId: col.id, value: val.toString() });
           }
         });
-        
-        // Guardar calificación final
-        if (calificacionFinal !== null && calificacionFinal !== undefined) {
-          finalGrades.push({
-            matricula,
-            finalGrade: calificacionFinal
-          });
-        }
       });
 
-      await api.post('/columns/save-custom', {
-        values,
-        finalGrades,
-        semester,
-        subject,
-        group,
-        teacherId
-      });
-
-      alert('Calificaciones guardadas exitosamente');
-      loadConfig();
+      await api.post('/columns/save-custom', { values, parciales, ordinarios, semester, subject, group, teacherId });
+      alert('✅ Calificaciones guardadas');
+      loadConfig(); // recargar para actualizar promedios y finales
     } catch (error) {
-      console.error('Error guardando:', error);
+      console.error(error);
       alert('Error al guardar calificaciones');
     } finally {
       setSaving(false);
@@ -163,204 +136,127 @@ function GradesTable({ semester, subject, group, teacherId, teacherName }) {
 
   const buildColumns = () => {
     const cols = [
-      { data: 0, title: 'Matricula', readOnly: true, width: 100, className: 'htCenter htMiddle' },
-      { data: 1, title: 'Nombre', readOnly: true, width: 200 }
+      { data: 0, title: 'Matrícula', readOnly: true, width: 100 },
+      { data: 1, title: 'Nombre', readOnly: true, width: 200 },
+      { data: 2, title: 'Parcial 1', type: 'numeric', numericFormat: { pattern: '0.00' }, width: 100 },
+      { data: 3, title: 'Parcial 2', type: 'numeric', numericFormat: { pattern: '0.00' }, width: 100 },
+      { data: 4, title: 'Parcial 3', type: 'numeric', numericFormat: { pattern: '0.00' }, width: 100 },
+      { data: 5, title: '⭐ Promedio Parciales', readOnly: true, type: 'numeric', numericFormat: { pattern: '0.00' }, width: 150 },
+      { data: 6, title: '📝 Evaluación Final', type: 'numeric', numericFormat: { pattern: '0.00' }, width: 130 }
     ];
-
-    // Agregar columnas personalizadas
-    columns.forEach((col, index) => {
+    const normalColumns = columns.filter(c => !c.is_special);
+    normalColumns.forEach(col => {
       cols.push({
-        data: index + 2,
-        title: `${col.column_name} (${col.weight}%)`,
-        type: col.column_type === 'text' ? 'text' : 'numeric',
-        numericFormat: col.column_type !== 'text' ? { pattern: '0.00' } : undefined,
-        width: 120
+        data: 7 + cols.length,
+        title: `${col.column_name} (${col.weight}% / ${col.max_value})`,
+        type: 'numeric',
+        numericFormat: { pattern: '0.00' },
+        width: 130
       });
     });
-
-    // Agregar columna de Calificación Final (calculada)
     cols.push({
-      data: columns.length + 2,
-      title: 'CALIFICACION FINAL',
+      data: 7 + cols.length,
+      title: '🎯 CALIFICACION FINAL',
+      readOnly: true,
       type: 'numeric',
       numericFormat: { pattern: '0.00' },
-      readOnly: true,
-      width: 150,
-      className: 'htCenter htMiddle'
+      width: 140
     });
-
+    cols.push({
+      data: 8 + cols.length,
+      title: 'Estado',
+      readOnly: true,
+      width: 110
+    });
     return cols;
   };
 
   const afterChange = (changes, source) => {
     if (!changes || source === 'loadData') return;
-    
     const hot = hotRef.current?.hotInstance;
     if (!hot) return;
 
     changes.forEach(([row, prop, oldValue, newValue]) => {
-      // Si cambió una columna numérica, recalcular final
-      if (prop >= 2 && prop < columns.length + 2) {
-        const colIndex = prop - 2;
-        const column = columns[colIndex];
-        
-        if (column?.column_type === 'numeric') {
-          recalcularFinal(hot, row);
-        }
+      // Si cambió Parcial 1,2,3 o Evaluación Final, recalcular promedio y final
+      if ([2, 3, 4, 6].includes(prop)) {
+        const p1 = parseFloat(hot.getDataAtCell(row, 2)) || 0;
+        const p2 = parseFloat(hot.getDataAtCell(row, 3)) || 0;
+        const p3 = parseFloat(hot.getDataAtCell(row, 4)) || 0;
+        const promedio = (p1 + p2 + p3) / 3;
+        hot.setDataAtCell(row, 5, promedio.toFixed(2), 'thisChange');
+        recalcularFinal(hot, row);
+      }
+      // Si cambió columna personalizada, recalcular final
+      const normalCount = columns.filter(c => !c.is_special).length;
+      const personalStart = 7;
+      if (prop >= personalStart && prop < personalStart + normalCount) {
+        recalcularFinal(hot, row);
       }
     });
   };
 
   const recalcularFinal = (hot, rowIndex) => {
-    let calificacionFinal = 0;
-    let pesoTotal = 0;
-    
-    columns.forEach((col, index) => {
-      if (col.column_type === 'numeric') {
-        const valor = parseFloat(hot.getDataAtCell(rowIndex, index + 2)) || 0;
-        const peso = parseFloat(col.weight) || 0;
-        const maxValue = parseFloat(col.max_value) || 10;
-        
-        if (valor > 0) {
-          const valorNormalizado = (valor / maxValue) * 10;
-          calificacionFinal += (valorNormalizado * peso) / 100;
-          pesoTotal += peso;
-        }
+    const p1 = parseFloat(hot.getDataAtCell(rowIndex, 2)) || 0;
+    const p2 = parseFloat(hot.getDataAtCell(rowIndex, 3)) || 0;
+    const p3 = parseFloat(hot.getDataAtCell(rowIndex, 4)) || 0;
+    const promedio = (p1 + p2 + p3) / 3;
+    const ordinario = parseFloat(hot.getDataAtCell(rowIndex, 6)) || 0;
+
+    let total = 0, pesoTotal = 0;
+    const specialCol = columns.find(c => c.is_special === 1);
+    if (specialCol) {
+      total += (promedio * (specialCol.weight / 100));
+      pesoTotal += specialCol.weight;
+    }
+    const normalColumns = columns.filter(c => !c.is_special);
+    const personalStart = 7;
+    normalColumns.forEach((col, idx) => {
+      const val = parseFloat(hot.getDataAtCell(rowIndex, personalStart + idx)) || 0;
+      const w = parseFloat(col.weight) || 0;
+      const maxVal = parseFloat(col.max_value) || 10;
+      if (val > 0) {
+        total += ((val / maxVal) * 10) * (w / 100);
+        pesoTotal += w;
       }
     });
-    
-    const finalValue = pesoTotal > 0 ? parseFloat(calificacionFinal.toFixed(2)) : null;
-    hot.setDataAtCell(rowIndex, columns.length + 2, finalValue, 'thisChange');
+    const finalGrade = pesoTotal > 0 ? parseFloat(total.toFixed(2)) : null;
+    const finalColIndex = personalStart + normalColumns.length;
+    hot.setDataAtCell(rowIndex, finalColIndex, finalGrade, 'thisChange');
+    const status = finalGrade >= 6 ? 'Aprobado' : finalGrade !== null ? 'Reprobado' : 'En Progreso';
+    hot.setDataAtCell(rowIndex, finalColIndex + 1, status, 'thisChange');
   };
 
-  if (showConfig) {
-    return (
-      <ColumnConfig
-        columns={columns}
-        onSave={handleSaveConfig}
-        onCancel={() => setShowConfig(false)}
-      />
-    );
-  }
-
-  if (loading) {
-    return <div className="text-center py-8">Cargando...</div>;
-  }
-
-  if (!semester || !subject) {
-    return (
-      <div className="text-center py-8 text-gray-500">
-        Selecciona semestre y materia
-      </div>
-    );
-  }
+  if (showConfig) return <ColumnConfig columns={columns} onSave={handleSaveConfig} onCancel={() => setShowConfig(false)} />;
+  if (loading) return <div className="text-center py-8">Cargando...</div>;
+  if (!semester || !subject) return <div className="text-center py-8 text-gray-500">Selecciona semestre y materia</div>;
 
   return (
     <div>
       <div className="mb-4 flex justify-between items-center">
-        <h3 className="text-lg font-semibold">
-          {data.length} alumnos - {columns.length} columnas configuradas
-        </h3>
+        <h3 className="text-lg font-semibold">{data.length} alumnos</h3>
         <div className="flex gap-2">
-          <button
-            onClick={() => setShowConfig(true)}
-            className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
-          >
-            Configurar Columnas
-          </button>
-          <button
-            onClick={handleSaveGrades}
-            disabled={saving}
-            className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-          >
+          <button onClick={() => setShowConfig(true)} className="bg-gray-600 text-white px-4 py-2 rounded">⚙️ Configurar Columnas</button>
+          <button onClick={handleSaveGrades} disabled={saving} className="bg-blue-600 text-white px-6 py-2 rounded disabled:opacity-50">
             {saving ? 'Guardando...' : 'Guardar Calificaciones'}
           </button>
         </div>
       </div>
-
-      {columns.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <p className="text-gray-600 mb-4">No hay columnas configuradas</p>
-          <button
-            onClick={() => setShowConfig(true)}
-            className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
-          >
-            Configurar Columnas
-          </button>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <HotTable
-            ref={hotRef}
-            data={data}
-            columns={buildColumns()}
-            colHeaders={true}
-            rowHeaders={true}
-            width="100%"
-            height="500"
-            licenseKey="non-commercial-and-evaluation"
-            stretchH="all"
-            contextMenu={true}
-            manualColumnResize={true}
-            afterChange={afterChange}
-            cells={(row, col) => {
-              const cellProperties = {};
-              
-              // Estilo para columna final
-              if (col === columns.length + 2) {
-                cellProperties.className = 'htCenter htMiddle';
-                cellProperties.renderer = function(instance, td, row, col, prop, value) {
-                  td.innerHTML = value !== null ? value.toFixed(2) : '';
-                  td.style.backgroundColor = '#EFF6FF';
-                  td.style.fontWeight = 'bold';
-                  td.style.textAlign = 'center';
-                  td.style.fontSize = '14px';
-                  
-                  if (value !== null) {
-                    if (value >= 9) {
-                      td.style.color = '#059669';
-                      td.style.backgroundColor = '#D1FAE5';
-                    } else if (value >= 6) {
-                      td.style.color = '#2563EB';
-                      td.style.backgroundColor = '#DBEAFE';
-                    } else {
-                      td.style.color = '#DC2626';
-                      td.style.backgroundColor = '#FEE2E2';
-                    }
-                  }
-                  
-                  return td;
-                };
-              }
-              
-              return cellProperties;
-            }}
-          />
-        </div>
-      )}
-
-      {columns.length > 0 && (
-        <div className="mt-4 p-4 bg-gray-50 rounded text-sm">
-          <p className="font-semibold mb-2">Columnas configuradas:</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {columns.map(col => (
-              <div key={col.id} className="bg-white p-2 rounded border">
-                <span className="font-medium">{col.column_name}</span>
-                {col.column_type === 'numeric' && (
-                  <span className="text-gray-600 ml-2">({col.weight}%)</span>
-                )}
-                {col.column_type === 'text' && (
-                  <span className="text-gray-400 ml-2 text-xs">(texto)</span>
-                )}
-              </div>
-            ))}
-            <div className="bg-blue-100 p-2 rounded border border-blue-300">
-              <span className="font-bold text-blue-900">CALIFICACION FINAL</span>
-              <span className="text-blue-700 ml-2">(calculada)</span>
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="overflow-x-auto">
+        <HotTable
+          ref={hotRef}
+          data={data}
+          columns={buildColumns()}
+          colHeaders={true}
+          rowHeaders={true}
+          width="100%"
+          height="500"
+          licenseKey="non-commercial-and-evaluation"
+          stretchH="all"
+          contextMenu={true}
+          manualColumnResize={true}
+          afterChange={afterChange}
+        />
+      </div>
     </div>
   );
 }

@@ -4,277 +4,376 @@ import db from '../config/database.js';
 
 const router = express.Router();
 
-// ==================== ESTUDIANTES ====================
+// ============================================
+// ENDPOINTS PARA ESTADÍSTICAS
+// ============================================
 
-// Obtener todos los estudiantes
-router.get('/students', async (req, res) => {
-  try {
-    const { status } = req.query;
-    
-    let query = 'SELECT * FROM students';
-    let params = [];
-    
-    if (status) {
-      query += ' WHERE status = ?';
-      params.push(status);
-    }
-    
-    query += ' ORDER BY last_name, first_name';
-    
-    const [students] = await db.query(query, params);
-    res.json({ students });
-
-  } catch (error) {
-    console.error('Error obteniendo estudiantes:', error);
-    res.status(500).json({ error: 'Error en el servidor' });
-  }
-});
-
-// Crear estudiante
-router.post('/students', async (req, res) => {
-  try {
-    const { matricula, firstName, lastName, email, password, dateOfBirth, phone, address } = req.body;
-
-    if (!matricula || !firstName || !lastName || !email || !password) {
-      return res.status(400).json({ error: 'Datos incompletos' });
-    }
-
-    // Verificar que no exista
-    const [existing] = await db.query('SELECT matricula FROM students WHERE matricula = ?', [matricula]);
-    if (existing.length > 0) {
-      return res.status(400).json({ error: 'La matrícula ya existe' });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    await db.query(`
-      INSERT INTO students 
-      (matricula, first_name, last_name, email, password_hash, date_of_birth, phone, address)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, [matricula, firstName, lastName, email, passwordHash, dateOfBirth || null, phone || null, address || null]);
-
-    res.json({ success: true, message: 'Estudiante creado exitosamente' });
-
-  } catch (error) {
-    console.error('Error creando estudiante:', error);
-    res.status(500).json({ error: 'Error al crear estudiante' });
-  }
-});
-
-// Actualizar estudiante
-router.put('/students/:matricula', async (req, res) => {
-  try {
-    const { matricula } = req.params;
-    const { firstName, lastName, email, phone, address, status, password } = req.body;
-
-    let query = `
-      UPDATE students 
-      SET first_name = ?, last_name = ?, email = ?, phone = ?, address = ?, status = ?
-    `;
-    let params = [firstName, lastName, email, phone, address, status];
-
-    if (password) {
-      const passwordHash = await bcrypt.hash(password, 10);
-      query += ', password_hash = ?';
-      params.push(passwordHash);
-    }
-
-    query += ' WHERE matricula = ?';
-    params.push(matricula);
-
-    await db.query(query, params);
-
-    res.json({ success: true, message: 'Estudiante actualizado exitosamente' });
-
-  } catch (error) {
-    console.error('Error actualizando estudiante:', error);
-    res.status(500).json({ error: 'Error al actualizar estudiante' });
-  }
-});
-
-// Eliminar estudiante (soft delete)
-router.delete('/students/:matricula', async (req, res) => {
-  try {
-    const { matricula } = req.params;
-
-    await db.query('UPDATE students SET status = ? WHERE matricula = ?', ['inactive', matricula]);
-
-    res.json({ success: true, message: 'Estudiante desactivado exitosamente' });
-
-  } catch (error) {
-    console.error('Error eliminando estudiante:', error);
-    res.status(500).json({ error: 'Error al eliminar estudiante' });
-  }
-});
-
-// ==================== USUARIOS (STAFF) ====================
-
-// Obtener todos los usuarios
-router.get('/users', async (req, res) => {
-  try {
-    const { role } = req.query;
-    
-    let query = 'SELECT id, username, first_name, last_name, email, role, phone, is_active FROM users';
-    let params = [];
-    
-    if (role) {
-      query += ' WHERE role = ?';
-      params.push(role);
-    }
-    
-    query += ' ORDER BY last_name, first_name';
-    
-    const [users] = await db.query(query, params);
-    res.json({ users });
-
-  } catch (error) {
-    console.error('Error obteniendo usuarios:', error);
-    res.status(500).json({ error: 'Error en el servidor' });
-  }
-});
-
-// Crear usuario
-router.post('/users', async (req, res) => {
-  try {
-    const { username, firstName, lastName, email, password, role, phone } = req.body;
-
-    if (!username || !firstName || !lastName || !email || !password || !role) {
-      return res.status(400).json({ error: 'Datos incompletos' });
-    }
-
-    // Verificar que no exista
-    const [existing] = await db.query('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
-    if (existing.length > 0) {
-      return res.status(400).json({ error: 'El usuario o email ya existe' });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    await db.query(`
-      INSERT INTO users 
-      (username, password_hash, first_name, last_name, email, role, phone)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [username, passwordHash, firstName, lastName, email, role, phone || null]);
-
-    res.json({ success: true, message: 'Usuario creado exitosamente' });
-
-  } catch (error) {
-    console.error('Error creando usuario:', error);
-    res.status(500).json({ error: 'Error al crear usuario' });
-  }
-});
-
-// Actualizar usuario
-router.put('/users/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { firstName, lastName, email, phone, role, isActive, password } = req.body;
-
-    let query = `
-      UPDATE users 
-      SET first_name = ?, last_name = ?, email = ?, phone = ?, role = ?, is_active = ?
-    `;
-    let params = [firstName, lastName, email, phone, role, isActive];
-
-    if (password) {
-      const passwordHash = await bcrypt.hash(password, 10);
-      query += ', password_hash = ?';
-      params.push(passwordHash);
-    }
-
-    query += ' WHERE id = ?';
-    params.push(id);
-
-    await db.query(query, params);
-
-    res.json({ success: true, message: 'Usuario actualizado exitosamente' });
-
-  } catch (error) {
-    console.error('Error actualizando usuario:', error);
-    res.status(500).json({ error: 'Error al actualizar usuario' });
-  }
-});
-
-// Eliminar usuario (soft delete)
-router.delete('/users/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await db.query('UPDATE users SET is_active = ? WHERE id = ?', [false, id]);
-
-    res.json({ success: true, message: 'Usuario desactivado exitosamente' });
-
-  } catch (error) {
-    console.error('Error eliminando usuario:', error);
-    res.status(500).json({ error: 'Error al eliminar usuario' });
-  }
-});
-
-// ==================== ESTADÍSTICAS ====================
-
-// Obtener estadísticas generales
 router.get('/stats', async (req, res) => {
   try {
-    // Total de estudiantes
-    const [studentsCount] = await db.query(
-      'SELECT COUNT(*) as total FROM students WHERE status = ?', 
-      ['active']
-    );
-
-    // Total de maestros
-    const [teachersCount] = await db.query(
-      'SELECT COUNT(*) as total FROM users WHERE role = ? AND is_active = ?', 
-      ['maestro', true]
-    );
-
-    // Estudiantes con promedio >= 9
-    const [excellentStudents] = await db.query(`
-      SELECT COUNT(DISTINCT student_matricula) as total 
-      FROM final_grades 
-      WHERE final_grade >= 9
-    `);
-
-    // Estudiantes con alguna materia reprobada
-    const [failingStudents] = await db.query(`
-      SELECT COUNT(DISTINCT student_matricula) as total 
-      FROM final_grades 
-      WHERE status = 'failed'
-    `);
-
-    // Promedio general de la institución
-    const [avgGrade] = await db.query(`
-      SELECT AVG(final_grade) as promedio 
-      FROM final_grades 
-      WHERE final_grade IS NOT NULL
-    `);
-
-    // Total de materias con calificaciones
-    const [subjectsCount] = await db.query(`
-      SELECT COUNT(DISTINCT CONCAT(semester_code, subject_code)) as total 
-      FROM final_grades
-    `);
-
+    const [totalStudents] = await db.query(`SELECT COUNT(*) as total FROM students WHERE status = 'active'`);
+    const [totalTeachers] = await db.query(`SELECT COUNT(*) as total FROM users WHERE role IN ('maestro', 'admin', 'director') AND status = 'active' AND is_active = 1`);
+    const [totalSubjects] = await db.query(`SELECT COUNT(DISTINCT subject_code) as total FROM final_grades`);
+    const [totalGrades] = await db.query(`SELECT COUNT(*) as total FROM final_grades WHERE final_grade IS NOT NULL`);
+    const [averageGrade] = await db.query(`SELECT ROUND(AVG(final_grade), 2) as promedio FROM final_grades WHERE final_grade IS NOT NULL`);
+    const [passedCount] = await db.query(`SELECT COUNT(*) as total FROM final_grades WHERE status = 'passed'`);
+    const [failedCount] = await db.query(`SELECT COUNT(*) as total FROM final_grades WHERE status = 'failed'`);
+    const [inProgressCount] = await db.query(`SELECT COUNT(*) as total FROM final_grades WHERE status = 'in_progress' OR final_grade IS NULL`);
+    
     res.json({
-      totalEstudiantes: studentsCount[0].total,
-      totalMaestros: teachersCount[0].total,
-      estudiantesExcelentes: excellentStudents[0].total,
-      estudiantesReprobados: failingStudents[0].total,
-      promedioGeneral: avgGrade[0].promedio || 0,
-      totalMaterias: subjectsCount[0].total
+      students: totalStudents[0].total,
+      teachers: totalTeachers[0].total,
+      subjects: totalSubjects[0].total,
+      grades: totalGrades[0].total,
+      average: averageGrade[0].promedio || 0,
+      passed: passedCount[0].total,
+      failed: failedCount[0].total,
+      inProgress: inProgressCount[0].total
     });
-
   } catch (error) {
     console.error('Error obteniendo estadísticas:', error);
     res.status(500).json({ error: 'Error en el servidor' });
   }
 });
 
-// Obtener todas las calificaciones (con filtros)
-router.get('/all-grades', async (req, res) => {
-  try {
-    const { semester, subject, group } = req.query;
+// ============================================
+// ENDPOINTS PARA MATERIAS (CRUD COMPLETO)
+// ============================================
 
+// Obtener todas las materias
+router.get('/materias', async (req, res) => {
+  try {
+    const [materias] = await db.query(`
+      SELECT m.*, 
+        COUNT(DISTINCT fg.student_matricula) as total_estudiantes,
+        COUNT(DISTINCT fg.teacher_id) as total_maestros
+      FROM materias m
+      LEFT JOIN final_grades fg ON m.subject_code = fg.subject_code
+      GROUP BY m.id
+      ORDER BY m.subject_code
+    `);
+    res.json({ materias });
+  } catch (error) {
+    console.error('Error obteniendo materias:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+// Crear nueva materia
+router.post('/materias', async (req, res) => {
+  try {
+    const { subject_code, subject_name, credits, description } = req.body;
+    
+    if (!subject_code || !subject_name) {
+      return res.status(400).json({ error: 'Código y nombre son requeridos' });
+    }
+    
+    const [existing] = await db.query('SELECT id FROM materias WHERE subject_code = ?', [subject_code]);
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'La materia ya existe' });
+    }
+    
+    await db.query(`
+      INSERT INTO materias (subject_code, subject_name, credits, description)
+      VALUES (?, ?, ?, ?)
+    `, [subject_code.toUpperCase(), subject_name, credits || 5, description || null]);
+    
+    res.json({ success: true, message: 'Materia creada exitosamente' });
+  } catch (error) {
+    console.error('Error creando materia:', error);
+    res.status(500).json({ error: 'Error al crear materia' });
+  }
+});
+
+// Actualizar materia
+router.put('/materias/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { subject_name, credits, description } = req.body;
+    
+    await db.query(`
+      UPDATE materias 
+      SET subject_name = ?, credits = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [subject_name, credits, description, id]);
+    
+    res.json({ success: true, message: 'Materia actualizada' });
+  } catch (error) {
+    console.error('Error actualizando materia:', error);
+    res.status(500).json({ error: 'Error al actualizar materia' });
+  }
+});
+
+// Eliminar materia
+router.delete('/materias/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const [materia] = await db.query('SELECT subject_code FROM materias WHERE id = ?', [id]);
+    if (materia.length === 0) {
+      return res.status(404).json({ error: 'Materia no encontrada' });
+    }
+    
+    const [asignaciones] = await db.query(`
+      SELECT COUNT(*) as total FROM final_grades WHERE subject_code = ?
+    `, [materia[0].subject_code]);
+    
+    if (asignaciones[0].total > 0) {
+      return res.status(400).json({ error: 'No se puede eliminar la materia porque tiene calificaciones asignadas' });
+    }
+    
+    await db.query('DELETE FROM materias WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Materia eliminada exitosamente' });
+  } catch (error) {
+    console.error('Error eliminando materia:', error);
+    res.status(500).json({ error: 'Error al eliminar materia' });
+  }
+});
+
+// Obtener profesores disponibles
+router.get('/profesores', async (req, res) => {
+  try {
+    const [profesores] = await db.query(`
+      SELECT id, username, first_name, last_name, email, role
+      FROM users 
+      WHERE role IN ('maestro', 'admin')
+      AND status = 'active'
+      AND is_active = 1
+      ORDER BY first_name, last_name
+    `);
+    res.json({ profesores });
+  } catch (error) {
+    console.error('Error obteniendo profesores:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+router.get('/grupos', async (req, res) => {
+  try {
+    const [grupos] = await db.query(`
+      SELECT DISTINCT group_code 
+      FROM final_grades 
+      WHERE group_code IS NOT NULL
+      ORDER BY group_code
+    `);
+    res.json({ grupos: grupos.map(g => g.group_code) });
+  } catch (error) {
+    console.error('Error obteniendo grupos:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+router.post('/asignar-materia', async (req, res) => {
+  try {
+    const { subject_code, teacher_id, semester_code, group_code } = req.body;
+    
+    if (!subject_code || !teacher_id || !semester_code) {
+      return res.status(400).json({ error: 'Faltan datos requeridos' });
+    }
+    
+    const [materia] = await db.query('SELECT subject_code FROM materias WHERE subject_code = ?', [subject_code]);
+    if (materia.length === 0) {
+      return res.status(400).json({ error: 'La materia no existe en el catálogo' });
+    }
+    
+    const [existing] = await db.query(`
+      SELECT id FROM final_grades 
+      WHERE subject_code = ? AND teacher_id = ? AND semester_code = ? AND group_code = ?
+      LIMIT 1
+    `, [subject_code, teacher_id, semester_code, group_code]);
+    
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'Esta materia ya está asignada a este profesor para este semestre/grupo' });
+    }
+    
+    const [students] = await db.query(`SELECT matricula FROM students WHERE status = 'active'`);
+    
+    if (students.length === 0) {
+      return res.status(400).json({ error: 'No hay estudiantes activos para asignar' });
+    }
+    
+    for (const student of students) {
+      await db.query(`
+        INSERT INTO final_grades 
+        (student_matricula, semester_code, subject_code, group_code, teacher_id, status)
+        VALUES (?, ?, ?, ?, ?, 'in_progress')
+      `, [student.matricula, semester_code, subject_code, group_code, teacher_id]);
+    }
+    
+    res.json({ success: true, message: `Materia asignada a ${students.length} estudiantes` });
+  } catch (error) {
+    console.error('Error asignando materia:', error);
+    res.status(500).json({ error: 'Error al asignar materia' });
+  }
+});
+
+router.get('/asignaciones', async (req, res) => {
+  try {
+    const { teacher_id } = req.query;
+    
     let query = `
+      SELECT DISTINCT 
+        fg.subject_code,
+        m.subject_name,
+        fg.semester_code,
+        fg.group_code,
+        COUNT(DISTINCT fg.student_matricula) as total_estudiantes,
+        CONCAT(u.first_name, ' ', u.last_name) as teacher_name,
+        fg.teacher_id
+      FROM final_grades fg
+      LEFT JOIN users u ON fg.teacher_id = u.id
+      LEFT JOIN materias m ON fg.subject_code = m.subject_code
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    
+    if (teacher_id) {
+      query += ` AND fg.teacher_id = ?`;
+      params.push(teacher_id);
+    }
+    
+    query += ` GROUP BY fg.subject_code, m.subject_name, fg.semester_code, fg.group_code, u.first_name, u.last_name, fg.teacher_id
+               ORDER BY fg.semester_code DESC, fg.subject_code`;
+    
+    const [asignaciones] = await db.query(query, params);
+    res.json({ asignaciones });
+  } catch (error) {
+    console.error('Error obteniendo asignaciones:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+// ============================================
+// ENDPOINTS PARA CALIFICACIONES CON COLUMNAS DINÁMICAS
+// ============================================
+
+router.get('/subjects', async (req, res) => {
+  try {
+    const [subjects] = await db.query(`
+      SELECT DISTINCT 
+        fg.subject_code,
+        COUNT(DISTINCT fg.student_matricula) as total_estudiantes,
+        COUNT(DISTINCT fg.teacher_id) as total_maestros
+      FROM final_grades fg
+      GROUP BY fg.subject_code
+      ORDER BY fg.subject_code
+    `);
+    res.json({ subjects });
+  } catch (error) {
+    console.error('Error obteniendo materias:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+router.get('/subject-groups', async (req, res) => {
+  try {
+    const { subjectCode, semester, teacherId } = req.query;
+    if (!subjectCode) {
+      return res.status(400).json({ error: 'Subject code requerido' });
+    }
+    let query = `
+      SELECT DISTINCT 
+        fg.group_code,
+        COUNT(DISTINCT fg.student_matricula) as total_students,
+        CONCAT(u.first_name, ' ', u.last_name) as teacher_name,
+        fg.teacher_id
+      FROM final_grades fg
+      LEFT JOIN users u ON fg.teacher_id = u.id
+      WHERE fg.subject_code = ?
+    `;
+    const params = [subjectCode];
+    if (semester) {
+      query += ` AND fg.semester_code = ?`;
+      params.push(semester);
+    }
+    if (teacherId) {
+      query += ` AND fg.teacher_id = ?`;
+      params.push(teacherId);
+    }
+    query += ` AND fg.group_code IS NOT NULL
+               GROUP BY fg.group_code, u.first_name, u.last_name, fg.teacher_id
+               ORDER BY fg.group_code`;
+    const [groups] = await db.query(query, params);
+    res.json({ groups });
+  } catch (error) {
+    console.error('Error obteniendo grupos:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+router.get('/teachers', async (req, res) => {
+  try {
+    const [teachers] = await db.query(`
+      SELECT id, username, first_name, last_name, email, role
+      FROM users 
+      WHERE role IN ('maestro', 'admin', 'director')
+      AND status = 'active'
+      AND is_active = 1
+      ORDER BY first_name, last_name
+    `);
+    res.json({ teachers });
+  } catch (error) {
+    console.error('Error obteniendo maestros:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+router.get('/semesters', async (req, res) => {
+  try {
+    const [semesters] = await db.query(`
+      SELECT DISTINCT semester_code
+      FROM final_grades
+      ORDER BY semester_code DESC
+    `);
+    res.json({ semesters: semesters.map(s => s.semester_code) });
+  } catch (error) {
+    console.error('Error obteniendo semestres:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+router.get('/all-grades-with-columns', async (req, res) => {
+  try {
+    const { semester, subject, group, teacherId } = req.query;
+    
+    let columnsQuery = `
+      SELECT DISTINCT 
+        gcc.id,
+        gcc.column_name,
+        gcc.column_type,
+        gcc.max_value,
+        gcc.weight,
+        gcc.display_order,
+        fg.subject_code,
+        fg.group_code,
+        fg.teacher_id
+      FROM grade_columns_config gcc
+      JOIN final_grades fg ON gcc.teacher_id = fg.teacher_id 
+        AND gcc.semester_code = fg.semester_code 
+        AND gcc.subject_code = fg.subject_code
+      WHERE 1=1
+    `;
+    const columnsParams = [];
+    if (semester) {
+      columnsQuery += ` AND gcc.semester_code = ?`;
+      columnsParams.push(semester);
+    }
+    if (subject) {
+      columnsQuery += ` AND gcc.subject_code = ?`;
+      columnsParams.push(subject);
+    }
+    if (group) {
+      columnsQuery += ` AND gcc.group_code = ?`;
+      columnsParams.push(group);
+    }
+    if (teacherId) {
+      columnsQuery += ` AND gcc.teacher_id = ?`;
+      columnsParams.push(teacherId);
+    }
+    columnsQuery += ` ORDER BY gcc.display_order`;
+    const [columns] = await db.query(columnsQuery, columnsParams);
+    
+    let gradesQuery = `
       SELECT 
         s.matricula,
         CONCAT(s.first_name, ' ', s.last_name) as alumno,
@@ -283,39 +382,200 @@ router.get('/all-grades', async (req, res) => {
         fg.group_code,
         CONCAT(u.first_name, ' ', u.last_name) as maestro,
         fg.final_grade,
-        fg.status
+        fg.status,
+        fg.id as grade_id
       FROM final_grades fg
       JOIN students s ON fg.student_matricula = s.matricula
       LEFT JOIN users u ON fg.teacher_id = u.id
       WHERE 1=1
     `;
-    
-    let params = [];
-
+    const gradesParams = [];
     if (semester) {
-      query += ' AND fg.semester_code = ?';
-      params.push(semester);
+      gradesQuery += ` AND fg.semester_code = ?`;
+      gradesParams.push(semester);
     }
-
     if (subject) {
-      query += ' AND fg.subject_code = ?';
-      params.push(subject);
+      gradesQuery += ` AND fg.subject_code = ?`;
+      gradesParams.push(subject);
     }
-
     if (group) {
-      query += ' AND fg.group_code = ?';
-      params.push(group);
+      gradesQuery += ` AND fg.group_code = ?`;
+      gradesParams.push(group);
     }
-
-    query += ' ORDER BY s.last_name, s.first_name, fg.semester_code DESC';
-
-    const [grades] = await db.query(query, params);
-
-    res.json({ grades });
-
+    if (teacherId) {
+      gradesQuery += ` AND fg.teacher_id = ?`;
+      gradesParams.push(teacherId);
+    }
+    gradesQuery += ` ORDER BY s.last_name, s.first_name`;
+    const [grades] = await db.query(gradesQuery, gradesParams);
+    
+    const gradeIds = grades.map(g => g.grade_id).filter(Boolean);
+    let customValues = [];
+    if (gradeIds.length > 0 && columns.length > 0) {
+      const placeholders = gradeIds.map(() => '?').join(',');
+      const [values] = await db.query(`
+        SELECT gcv.grade_id, gcv.column_config_id, gcv.value
+        FROM grade_custom_values gcv
+        WHERE gcv.grade_id IN (${placeholders})
+      `, gradeIds);
+      customValues = values;
+    }
+    
+    const result = grades.map(g => {
+      const row = {
+        matricula: g.matricula,
+        alumno: g.alumno,
+        semester_code: g.semester_code,
+        subject_code: g.subject_code,
+        group_code: g.group_code,
+        maestro: g.maestro,
+        final_grade: g.final_grade,
+        status: g.status,
+        grade_id: g.grade_id
+      };
+      columns.forEach(col => {
+        const value = customValues.find(
+          v => v.grade_id === g.grade_id && v.column_config_id === col.id
+        );
+        row[`col_${col.id}`] = value ? value.value : null;
+      });
+      return row;
+    });
+    
+    res.json({ grades: result, columns });
   } catch (error) {
-    console.error('Error obteniendo calificaciones:', error);
+    console.error('Error obteniendo calificaciones con columnas:', error);
     res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+// ============================================
+// ENDPOINTS PARA ESTUDIANTES
+// ============================================
+
+router.get('/students', async (req, res) => {
+  try {
+    const [students] = await db.query(`SELECT * FROM students ORDER BY created_at DESC`);
+    res.json({ students });
+  } catch (error) {
+    console.error('Error obteniendo estudiantes:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+router.post('/students', async (req, res) => {
+  try {
+    const { matricula, firstName, lastName, email, password, dateOfBirth, phone, address, status } = req.body;
+    const [existing] = await db.query('SELECT matricula FROM students WHERE matricula = ? OR email = ?', [matricula, email]);
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'Matrícula o email ya existe' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    await db.query(`
+      INSERT INTO students (matricula, first_name, last_name, email, password_hash, date_of_birth, phone, address, status, admission_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())
+    `, [matricula, firstName, lastName, email, passwordHash, dateOfBirth, phone || null, address || null, status || 'active']);
+    res.json({ success: true, message: 'Estudiante creado exitosamente' });
+  } catch (error) {
+    console.error('Error creando estudiante:', error);
+    res.status(500).json({ error: 'Error al crear estudiante' });
+  }
+});
+
+router.put('/students/:matricula', async (req, res) => {
+  try {
+    const { matricula } = req.params;
+    const { firstName, lastName, email, password, dateOfBirth, phone, address, status } = req.body;
+    let query = 'UPDATE students SET first_name = ?, last_name = ?, email = ?, date_of_birth = ?, phone = ?, address = ?, status = ?';
+    const params = [firstName, lastName, email, dateOfBirth, phone || null, address || null, status];
+    if (password && password.trim() !== '') {
+      const passwordHash = await bcrypt.hash(password, 10);
+      query += ', password_hash = ?';
+      params.push(passwordHash);
+    }
+    query += ' WHERE matricula = ?';
+    params.push(matricula);
+    await db.query(query, params);
+    res.json({ success: true, message: 'Estudiante actualizado' });
+  } catch (error) {
+    console.error('Error actualizando estudiante:', error);
+    res.status(500).json({ error: 'Error al actualizar estudiante' });
+  }
+});
+
+router.delete('/students/:matricula', async (req, res) => {
+  try {
+    const { matricula } = req.params;
+    await db.query('UPDATE students SET status = "inactive" WHERE matricula = ?', [matricula]);
+    res.json({ success: true, message: 'Estudiante desactivado' });
+  } catch (error) {
+    console.error('Error desactivando estudiante:', error);
+    res.status(500).json({ error: 'Error al desactivar estudiante' });
+  }
+});
+
+// ============================================
+// ENDPOINTS PARA USUARIOS
+// ============================================
+
+router.get('/users', async (req, res) => {
+  try {
+    const [users] = await db.query(`SELECT id, username, first_name, last_name, email, role, is_active, phone, created_at FROM users ORDER BY created_at DESC`);
+    res.json({ users });
+  } catch (error) {
+    console.error('Error obteniendo usuarios:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+router.post('/users', async (req, res) => {
+  try {
+    const { username, firstName, lastName, email, password, role, phone, isActive } = req.body;
+    const [existing] = await db.query('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'Usuario o email ya existe' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    await db.query(`
+      INSERT INTO users (username, first_name, last_name, email, password_hash, role, phone, is_active, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+    `, [username, firstName, lastName, email, passwordHash, role, phone || null, isActive !== false]);
+    res.json({ success: true, message: 'Usuario creado' });
+  } catch (error) {
+    console.error('Error creando usuario:', error);
+    res.status(500).json({ error: 'Error al crear usuario' });
+  }
+});
+
+router.put('/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username, firstName, lastName, email, password, role, phone, isActive } = req.body;
+    let query = 'UPDATE users SET username = ?, first_name = ?, last_name = ?, email = ?, role = ?, phone = ?, is_active = ?';
+    const params = [username, firstName, lastName, email, role, phone || null, isActive !== false];
+    if (password && password.trim() !== '') {
+      const passwordHash = await bcrypt.hash(password, 10);
+      query += ', password_hash = ?';
+      params.push(passwordHash);
+    }
+    query += ' WHERE id = ?';
+    params.push(id);
+    await db.query(query, params);
+    res.json({ success: true, message: 'Usuario actualizado' });
+  } catch (error) {
+    console.error('Error actualizando usuario:', error);
+    res.status(500).json({ error: 'Error al actualizar usuario' });
+  }
+});
+
+router.delete('/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.query('UPDATE users SET is_active = FALSE, status = "inactive" WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Usuario desactivado' });
+  } catch (error) {
+    console.error('Error desactivando usuario:', error);
+    res.status(500).json({ error: 'Error al desactivar usuario' });
   }
 });
 
