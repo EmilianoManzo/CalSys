@@ -1,97 +1,23 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
-import AdminDashboard from './pages/AdminDashboard';
-import DirectorDashboard from './pages/DirectorDashboard';
-import MaestroDashboard from './pages/MaestroDashboard';
 import AlumnoDashboard from './pages/AlumnoDashboard';
+import MaestroDashboard from './pages/MaestroDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 
-function ProtectedRoute({ children, allowedRoles }) {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-xl font-semibold text-gray-600">Cargando...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return children;
+function LoadingSpinner() {
+  return <div className="flex items-center justify-center min-h-screen">Cargando...</div>;
 }
 
 function AppRoutes() {
-  const { user } = useAuth();
-
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingSpinner />;
   return (
     <Routes>
-      {/* Ruta de Login */}
-      <Route 
-        path="/login" 
-        element={
-          user ? (
-            <Navigate 
-              to={user.role === 'student' ? '/alumno' : `/${user.role}`} 
-              replace 
-            />
-          ) : (
-            <Login />
-          )
-        } 
-      />
-
-      {/* Dashboard de Administrador */}
-      <Route 
-        path="/admin" 
-        element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AdminDashboard />
-          </ProtectedRoute>
-        } 
-      />
-
-      {/* Dashboard de Director */}
-      <Route 
-        path="/director" 
-        element={
-          <ProtectedRoute allowedRoles={['director']}>
-            <DirectorDashboard />
-          </ProtectedRoute>
-        } 
-      />
-
-      {/* Dashboard de Maestro */}
-      <Route 
-        path="/maestro" 
-        element={
-          <ProtectedRoute allowedRoles={['maestro']}>
-            <MaestroDashboard />
-          </ProtectedRoute>
-        } 
-      />
-
-      {/* Dashboard de Alumno */}
-      <Route 
-        path="/alumno" 
-        element={
-          <ProtectedRoute allowedRoles={['student']}>
-            <AlumnoDashboard />
-          </ProtectedRoute>
-        } 
-      />
-
-      {/* Ruta raíz - redirige a login */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
-
-      {/* Ruta 404 - cualquier otra ruta redirige a login */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/alumno" element={user?.role === 'alumno' ? <AlumnoDashboard /> : <Navigate to="/login" replace />} />
+      <Route path="/maestro" element={user?.role === 'maestro' || user?.role === 'admin' ? <MaestroDashboard /> : <Navigate to="/login" replace />} />
+      <Route path="/admin" element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
@@ -99,11 +25,11 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
+    <BrowserRouter>
+      <AuthProvider>
         <AppRoutes />
-      </Router>
-    </AuthProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

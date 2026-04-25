@@ -39,7 +39,7 @@ router.get('/stats', async (req, res) => {
 // ENDPOINTS PARA MATERIAS (CRUD COMPLETO)
 // ============================================
 
-// Obtener todas las materias
+// Obtener todas las materias (catálogo)
 router.get('/materias', async (req, res) => {
   try {
     const [materias] = await db.query(`
@@ -129,7 +129,7 @@ router.delete('/materias/:id', async (req, res) => {
   }
 });
 
-// Obtener profesores disponibles
+// Obtener profesores disponibles (para asignar)
 router.get('/profesores', async (req, res) => {
   try {
     const [profesores] = await db.query(`
@@ -147,6 +147,7 @@ router.get('/profesores', async (req, res) => {
   }
 });
 
+// Obtener grupos existentes (para asignación)
 router.get('/grupos', async (req, res) => {
   try {
     const [grupos] = await db.query(`
@@ -162,6 +163,7 @@ router.get('/grupos', async (req, res) => {
   }
 });
 
+// Asignar materia a profesor y a todos los estudiantes activos
 router.post('/asignar-materia', async (req, res) => {
   try {
     const { subject_code, teacher_id, semester_code, group_code } = req.body;
@@ -206,6 +208,7 @@ router.post('/asignar-materia', async (req, res) => {
   }
 });
 
+// Obtener asignaciones actuales
 router.get('/asignaciones', async (req, res) => {
   try {
     const { teacher_id } = req.query;
@@ -244,18 +247,20 @@ router.get('/asignaciones', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINTS PARA CALIFICACIONES CON COLUMNAS DINÁMICAS
+// ENDPOINTS PARA CALIFICACIONES (CON TEACHER_ID)
 // ============================================
 
+// Lista de materias (con teacher_id) para el filtro de calificaciones
 router.get('/subjects', async (req, res) => {
   try {
     const [subjects] = await db.query(`
       SELECT DISTINCT 
         fg.subject_code,
+        fg.teacher_id,
         COUNT(DISTINCT fg.student_matricula) as total_estudiantes,
         COUNT(DISTINCT fg.teacher_id) as total_maestros
       FROM final_grades fg
-      GROUP BY fg.subject_code
+      GROUP BY fg.subject_code, fg.teacher_id
       ORDER BY fg.subject_code
     `);
     res.json({ subjects });
@@ -265,6 +270,7 @@ router.get('/subjects', async (req, res) => {
   }
 });
 
+// Grupos por materia (con teacher_id)
 router.get('/subject-groups', async (req, res) => {
   try {
     const { subjectCode, semester, teacherId } = req.query;
@@ -301,6 +307,7 @@ router.get('/subject-groups', async (req, res) => {
   }
 });
 
+// Lista de profesores (para el filtro de calificaciones) – sin eliminar el existente /profesores
 router.get('/teachers', async (req, res) => {
   try {
     const [teachers] = await db.query(`
@@ -318,6 +325,7 @@ router.get('/teachers', async (req, res) => {
   }
 });
 
+// Semestres disponibles
 router.get('/semesters', async (req, res) => {
   try {
     const [semesters] = await db.query(`
@@ -328,123 +336,6 @@ router.get('/semesters', async (req, res) => {
     res.json({ semesters: semesters.map(s => s.semester_code) });
   } catch (error) {
     console.error('Error obteniendo semestres:', error);
-    res.status(500).json({ error: 'Error en el servidor' });
-  }
-});
-
-router.get('/all-grades-with-columns', async (req, res) => {
-  try {
-    const { semester, subject, group, teacherId } = req.query;
-    
-    let columnsQuery = `
-      SELECT DISTINCT 
-        gcc.id,
-        gcc.column_name,
-        gcc.column_type,
-        gcc.max_value,
-        gcc.weight,
-        gcc.display_order,
-        fg.subject_code,
-        fg.group_code,
-        fg.teacher_id
-      FROM grade_columns_config gcc
-      JOIN final_grades fg ON gcc.teacher_id = fg.teacher_id 
-        AND gcc.semester_code = fg.semester_code 
-        AND gcc.subject_code = fg.subject_code
-      WHERE 1=1
-    `;
-    const columnsParams = [];
-    if (semester) {
-      columnsQuery += ` AND gcc.semester_code = ?`;
-      columnsParams.push(semester);
-    }
-    if (subject) {
-      columnsQuery += ` AND gcc.subject_code = ?`;
-      columnsParams.push(subject);
-    }
-    if (group) {
-      columnsQuery += ` AND gcc.group_code = ?`;
-      columnsParams.push(group);
-    }
-    if (teacherId) {
-      columnsQuery += ` AND gcc.teacher_id = ?`;
-      columnsParams.push(teacherId);
-    }
-    columnsQuery += ` ORDER BY gcc.display_order`;
-    const [columns] = await db.query(columnsQuery, columnsParams);
-    
-    let gradesQuery = `
-      SELECT 
-        s.matricula,
-        CONCAT(s.first_name, ' ', s.last_name) as alumno,
-        fg.semester_code,
-        fg.subject_code,
-        fg.group_code,
-        CONCAT(u.first_name, ' ', u.last_name) as maestro,
-        fg.final_grade,
-        fg.status,
-        fg.id as grade_id
-      FROM final_grades fg
-      JOIN students s ON fg.student_matricula = s.matricula
-      LEFT JOIN users u ON fg.teacher_id = u.id
-      WHERE 1=1
-    `;
-    const gradesParams = [];
-    if (semester) {
-      gradesQuery += ` AND fg.semester_code = ?`;
-      gradesParams.push(semester);
-    }
-    if (subject) {
-      gradesQuery += ` AND fg.subject_code = ?`;
-      gradesParams.push(subject);
-    }
-    if (group) {
-      gradesQuery += ` AND fg.group_code = ?`;
-      gradesParams.push(group);
-    }
-    if (teacherId) {
-      gradesQuery += ` AND fg.teacher_id = ?`;
-      gradesParams.push(teacherId);
-    }
-    gradesQuery += ` ORDER BY s.last_name, s.first_name`;
-    const [grades] = await db.query(gradesQuery, gradesParams);
-    
-    const gradeIds = grades.map(g => g.grade_id).filter(Boolean);
-    let customValues = [];
-    if (gradeIds.length > 0 && columns.length > 0) {
-      const placeholders = gradeIds.map(() => '?').join(',');
-      const [values] = await db.query(`
-        SELECT gcv.grade_id, gcv.column_config_id, gcv.value
-        FROM grade_custom_values gcv
-        WHERE gcv.grade_id IN (${placeholders})
-      `, gradeIds);
-      customValues = values;
-    }
-    
-    const result = grades.map(g => {
-      const row = {
-        matricula: g.matricula,
-        alumno: g.alumno,
-        semester_code: g.semester_code,
-        subject_code: g.subject_code,
-        group_code: g.group_code,
-        maestro: g.maestro,
-        final_grade: g.final_grade,
-        status: g.status,
-        grade_id: g.grade_id
-      };
-      columns.forEach(col => {
-        const value = customValues.find(
-          v => v.grade_id === g.grade_id && v.column_config_id === col.id
-        );
-        row[`col_${col.id}`] = value ? value.value : null;
-      });
-      return row;
-    });
-    
-    res.json({ grades: result, columns });
-  } catch (error) {
-    console.error('Error obteniendo calificaciones con columnas:', error);
     res.status(500).json({ error: 'Error en el servidor' });
   }
 });
@@ -515,7 +406,7 @@ router.delete('/students/:matricula', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINTS PARA USUARIOS
+// ENDPOINTS PARA USUARIOS (STAFF)
 // ============================================
 
 router.get('/users', async (req, res) => {

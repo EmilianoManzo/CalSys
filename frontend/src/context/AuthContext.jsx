@@ -1,72 +1,56 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../api/axios';
 
-const AuthContext = createContext(null);
+const AuthContext = createContext();
 
-export function AuthProvider({ children }) {
+export const useAuth = () => useContext(AuthContext);
+
+export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkAuth();
+    const initAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        try {
+          const response = await api.get('/auth/me');
+          setUser(response.data.user);
+        } catch (error) {
+          console.error('Error al verificar token:', error);
+          localStorage.removeItem('token');
+          delete api.defaults.headers.common['Authorization'];
+        }
+      }
+      setLoading(false);
+    };
+    initAuth();
   }, []);
 
-  const checkAuth = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
+  const login = async (username, password, role) => {
     try {
-      const response = await api.get('/auth/me');
-      console.log('Usuario recuperado:', response.data.user);
-      setUser(response.data.user);
+      const response = await api.post('/auth/login', { username, password, role });
+      const { token, user: userData } = response.data;
+      localStorage.setItem('token', token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setUser(userData);
+      return { success: true, role: userData.role };
     } catch (error) {
-      console.error('Error al verificar auth:', error);
-      localStorage.removeItem('token');
-      setUser(null);
-    } finally {
-      setLoading(false);
+      console.error('Login error:', error);
+      return { success: false, error: error.response?.data?.error || 'Error al iniciar sesión' };
     }
-  };
-
-  const login = async (credentials, isStudent = false) => {
-    const endpoint = isStudent ? '/auth/login-student' : '/auth/login';
-    console.log('Llamando a:', endpoint);
-    console.log('Credenciales:', credentials);
-    
-    const response = await api.post(endpoint, credentials);
-    console.log('Respuesta del servidor:', response.data);
-    
-    const { token, user } = response.data;
-    
-    localStorage.setItem('token', token);
-    console.log('Token guardado:', token);
-    
-    setUser(user);
-    console.log('Usuario guardado en estado:', user);
-    
-    return user;
   };
 
   const logout = () => {
     localStorage.removeItem('token');
+    delete api.defaults.headers.common['Authorization'];
     setUser(null);
-    window.location.href = '/login';
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, checkAuth }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth debe usarse dentro de AuthProvider');
-  }
-  return context;
-}
+};
