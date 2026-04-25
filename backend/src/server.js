@@ -6,7 +6,7 @@ import authRoutes from './routes/auth.routes.js';
 import gradesRoutes from './routes/grades.routes.js';
 import columnsRoutes from './routes/columns.routes.js';
 import adminRoutes from './routes/admin.routes.js';
-import partialsRoutes from './routes/partials.routes.js';   // ← Ruta de parciales
+import partialsRoutes from './routes/partials.routes.js';
 
 dotenv.config();
 
@@ -29,14 +29,12 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// ============================================
-// REGISTRO DE RUTAS
-// ============================================
+// Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/grades', gradesRoutes);
 app.use('/api/columns', columnsRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/partials', partialsRoutes);   // ← REGISTRO IMPORTANTE
+app.use('/api/partials', partialsRoutes);
 
 // 404
 app.use((req, res) => {

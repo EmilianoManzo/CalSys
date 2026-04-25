@@ -5,9 +5,8 @@ import db from '../config/database.js';
 const router = express.Router();
 
 // ============================================
-// ENDPOINTS PARA ESTADÍSTICAS
+// ESTADÍSTICAS
 // ============================================
-
 router.get('/stats', async (req, res) => {
   try {
     const [totalStudents] = await db.query(`SELECT COUNT(*) as total FROM students WHERE status = 'active'`);
@@ -36,10 +35,8 @@ router.get('/stats', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINTS PARA MATERIAS (CRUD COMPLETO)
+// GESTIÓN DE MATERIAS (catálogo)
 // ============================================
-
-// Obtener todas las materias (catálogo)
 router.get('/materias', async (req, res) => {
   try {
     const [materias] = await db.query(`
@@ -58,25 +55,20 @@ router.get('/materias', async (req, res) => {
   }
 });
 
-// Crear nueva materia
 router.post('/materias', async (req, res) => {
   try {
     const { subject_code, subject_name, credits, description } = req.body;
-    
     if (!subject_code || !subject_name) {
       return res.status(400).json({ error: 'Código y nombre son requeridos' });
     }
-    
     const [existing] = await db.query('SELECT id FROM materias WHERE subject_code = ?', [subject_code]);
     if (existing.length > 0) {
       return res.status(400).json({ error: 'La materia ya existe' });
     }
-    
     await db.query(`
       INSERT INTO materias (subject_code, subject_name, credits, description)
       VALUES (?, ?, ?, ?)
     `, [subject_code.toUpperCase(), subject_name, credits || 5, description || null]);
-    
     res.json({ success: true, message: 'Materia creada exitosamente' });
   } catch (error) {
     console.error('Error creando materia:', error);
@@ -84,18 +76,15 @@ router.post('/materias', async (req, res) => {
   }
 });
 
-// Actualizar materia
 router.put('/materias/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { subject_name, credits, description } = req.body;
-    
     await db.query(`
       UPDATE materias 
       SET subject_name = ?, credits = ?, description = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [subject_name, credits, description, id]);
-    
     res.json({ success: true, message: 'Materia actualizada' });
   } catch (error) {
     console.error('Error actualizando materia:', error);
@@ -103,24 +92,19 @@ router.put('/materias/:id', async (req, res) => {
   }
 });
 
-// Eliminar materia
 router.delete('/materias/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
     const [materia] = await db.query('SELECT subject_code FROM materias WHERE id = ?', [id]);
     if (materia.length === 0) {
       return res.status(404).json({ error: 'Materia no encontrada' });
     }
-    
     const [asignaciones] = await db.query(`
       SELECT COUNT(*) as total FROM final_grades WHERE subject_code = ?
     `, [materia[0].subject_code]);
-    
     if (asignaciones[0].total > 0) {
       return res.status(400).json({ error: 'No se puede eliminar la materia porque tiene calificaciones asignadas' });
     }
-    
     await db.query('DELETE FROM materias WHERE id = ?', [id]);
     res.json({ success: true, message: 'Materia eliminada exitosamente' });
   } catch (error) {
@@ -129,7 +113,9 @@ router.delete('/materias/:id', async (req, res) => {
   }
 });
 
-// Obtener profesores disponibles (para asignar)
+// ============================================
+// ASIGNACIÓN DE MATERIAS A PROFESORES
+// ============================================
 router.get('/profesores', async (req, res) => {
   try {
     const [profesores] = await db.query(`
@@ -147,7 +133,6 @@ router.get('/profesores', async (req, res) => {
   }
 });
 
-// Obtener grupos existentes (para asignación)
 router.get('/grupos', async (req, res) => {
   try {
     const [grupos] = await db.query(`
@@ -163,36 +148,28 @@ router.get('/grupos', async (req, res) => {
   }
 });
 
-// Asignar materia a profesor y a todos los estudiantes activos
 router.post('/asignar-materia', async (req, res) => {
   try {
     const { subject_code, teacher_id, semester_code, group_code } = req.body;
-    
     if (!subject_code || !teacher_id || !semester_code) {
       return res.status(400).json({ error: 'Faltan datos requeridos' });
     }
-    
     const [materia] = await db.query('SELECT subject_code FROM materias WHERE subject_code = ?', [subject_code]);
     if (materia.length === 0) {
       return res.status(400).json({ error: 'La materia no existe en el catálogo' });
     }
-    
     const [existing] = await db.query(`
       SELECT id FROM final_grades 
       WHERE subject_code = ? AND teacher_id = ? AND semester_code = ? AND group_code = ?
       LIMIT 1
     `, [subject_code, teacher_id, semester_code, group_code]);
-    
     if (existing.length > 0) {
       return res.status(400).json({ error: 'Esta materia ya está asignada a este profesor para este semestre/grupo' });
     }
-    
     const [students] = await db.query(`SELECT matricula FROM students WHERE status = 'active'`);
-    
     if (students.length === 0) {
       return res.status(400).json({ error: 'No hay estudiantes activos para asignar' });
     }
-    
     for (const student of students) {
       await db.query(`
         INSERT INTO final_grades 
@@ -200,7 +177,6 @@ router.post('/asignar-materia', async (req, res) => {
         VALUES (?, ?, ?, ?, ?, 'in_progress')
       `, [student.matricula, semester_code, subject_code, group_code, teacher_id]);
     }
-    
     res.json({ success: true, message: `Materia asignada a ${students.length} estudiantes` });
   } catch (error) {
     console.error('Error asignando materia:', error);
@@ -208,11 +184,9 @@ router.post('/asignar-materia', async (req, res) => {
   }
 });
 
-// Obtener asignaciones actuales
 router.get('/asignaciones', async (req, res) => {
   try {
     const { teacher_id } = req.query;
-    
     let query = `
       SELECT DISTINCT 
         fg.subject_code,
@@ -227,17 +201,13 @@ router.get('/asignaciones', async (req, res) => {
       LEFT JOIN materias m ON fg.subject_code = m.subject_code
       WHERE 1=1
     `;
-    
     const params = [];
-    
     if (teacher_id) {
       query += ` AND fg.teacher_id = ?`;
       params.push(teacher_id);
     }
-    
     query += ` GROUP BY fg.subject_code, m.subject_name, fg.semester_code, fg.group_code, u.first_name, u.last_name, fg.teacher_id
                ORDER BY fg.semester_code DESC, fg.subject_code`;
-    
     const [asignaciones] = await db.query(query, params);
     res.json({ asignaciones });
   } catch (error) {
@@ -247,10 +217,8 @@ router.get('/asignaciones', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINTS PARA CALIFICACIONES (CON TEACHER_ID)
+// ENDPOINTS PARA EL ADMIN (calificaciones)
 // ============================================
-
-// Lista de materias (con teacher_id) para el filtro de calificaciones
 router.get('/subjects', async (req, res) => {
   try {
     const [subjects] = await db.query(`
@@ -270,7 +238,6 @@ router.get('/subjects', async (req, res) => {
   }
 });
 
-// Grupos por materia (con teacher_id)
 router.get('/subject-groups', async (req, res) => {
   try {
     const { subjectCode, semester, teacherId } = req.query;
@@ -307,7 +274,6 @@ router.get('/subject-groups', async (req, res) => {
   }
 });
 
-// Lista de profesores (para el filtro de calificaciones) – sin eliminar el existente /profesores
 router.get('/teachers', async (req, res) => {
   try {
     const [teachers] = await db.query(`
@@ -325,7 +291,6 @@ router.get('/teachers', async (req, res) => {
   }
 });
 
-// Semestres disponibles
 router.get('/semesters', async (req, res) => {
   try {
     const [semesters] = await db.query(`
@@ -341,9 +306,8 @@ router.get('/semesters', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINTS PARA ESTUDIANTES
+// CRUD DE ESTUDIANTES
 // ============================================
-
 router.get('/students', async (req, res) => {
   try {
     const [students] = await db.query(`SELECT * FROM students ORDER BY created_at DESC`);
@@ -406,9 +370,8 @@ router.delete('/students/:matricula', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINTS PARA USUARIOS (STAFF)
+// CRUD DE USUARIOS (staff)
 // ============================================
-
 router.get('/users', async (req, res) => {
   try {
     const [users] = await db.query(`SELECT id, username, first_name, last_name, email, role, is_active, phone, created_at FROM users ORDER BY created_at DESC`);
