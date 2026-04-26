@@ -84,42 +84,28 @@ function GradesViewer() {
   const cargarCalificaciones = async () => {
     setLoading(true);
     try {
-      // Parámetros para obtener columnas
-      const paramsColumns = {
+      const params = {
         teacherId: filters.teacherId,
         semester: filters.semester,
         subject: filters.subject,
         partialId
       };
-      if (filters.group && filters.group !== '') {
-        paramsColumns.group = filters.group;
-      }
-      const columnsRes = await api.get('/partials/config', { params: paramsColumns });
-      const configColumns = columnsRes.data.columns || [];
-      setColumns(configColumns);
+      if (filters.group && filters.group !== '') params.group = filters.group;
 
-      // Parámetros para obtener calificaciones
-      const paramsGrades = {
-        teacherId: filters.teacherId,
-        semester: filters.semester,
-        subject: filters.subject,
-        partialId
-      };
-      if (filters.group && filters.group !== '') {
-        paramsGrades.group = filters.group;
-      }
-      const gradesRes = await api.get('/partials/grades', { params: paramsGrades });
-      const rawGrades = gradesRes.data.grades || [];
+      const response = await api.get('/partials/grades', { params });
+      const rawGrades = response.data.grades || [];
+      const columnsData = response.data.columns || [];
 
       const tableData = rawGrades.map(g => {
         const row = [g.matricula, g.nombre];
-        configColumns.forEach(col => {
+        columnsData.forEach(col => {
           const val = g[`col_${col.column_name}`];
           row.push(val !== null ? parseFloat(val).toFixed(2) : '');
         });
         return row;
       });
       setGrades(tableData);
+      setColumns(columnsData);
     } catch (error) {
       console.error('Error cargando calificaciones:', error);
       alert('Error al cargar calificaciones');
@@ -259,13 +245,9 @@ function GradesViewer() {
         {loading ? (
           <div className="text-center py-12">Cargando calificaciones...</div>
         ) : !filters.subject ? (
-          <div className="text-center py-12 text-gray-500">
-            Selecciona una materia para ver sus calificaciones
-          </div>
+          <div className="text-center py-12 text-gray-500">Selecciona una materia</div>
         ) : grades.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            No hay calificaciones registradas para los filtros seleccionados
-          </div>
+          <div className="text-center py-12 text-gray-500">No hay calificaciones</div>
         ) : (
           <HotTable
             ref={hotRef}

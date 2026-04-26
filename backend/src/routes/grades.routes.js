@@ -3,8 +3,98 @@ import db from '../config/database.js';
 
 const router = express.Router();
 
-// Obtener materias del profesor (para su dashboard)
+// ----------------------------------------------------------------------
+// Funciones auxiliares (reutilizadas)
+// ----------------------------------------------------------------------
+async function calcularPromedioParcial(teacherId, semester, subject, group, partialId, matricula) {
+  const [columns] = await db.query(`
+    SELECT column_name, weight, max_value
+    FROM partial_columns_config
+    WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
+      AND partial_id = ?
+      AND is_special = 0
+      AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
+  `, [teacherId, semester, subject, partialId, group, group]);
+  if (columns.length === 0) return null;
+
+  const [values] = await db.query(`
+    SELECT column_name, value
+    FROM partial_grades
+    WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
+      AND partial_id = ?
+      AND student_matricula = ?
+      AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
+  `, [teacherId, semester, subject, partialId, matricula, group, group]);
+  const valMap = {};
+  for (const v of values) valMap[v.column_name] = parseFloat(v.value);
+
+  let total = 0, peso = 0;
+  for (const col of columns) {
+    const val = valMap[col.column_name];
+    if (val !== undefined && !isNaN(val)) {
+      const w = parseFloat(col.weight) || 0;
+      const max = parseFloat(col.max_value) || 10;
+      total += (val / max) * 10 * (w / 100);
+      peso += w;
+    }
+  }
+  return peso > 0 ? parseFloat(total.toFixed(2)) : null;
+}
+
+async function calcularFinalGlobal(teacherId, semester, subject, group, matricula) {
+  const [columns] = await db.query(`
+    SELECT column_name, weight, max_value, is_special
+    FROM partial_columns_config
+    WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
+      AND partial_id = 4
+      AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
+  `, [teacherId, semester, subject, group, group]);
+  if (columns.length === 0) return null;
+
+  const normalCols = columns.filter(c => !c.is_special);
+  const [values] = await db.query(`
+    SELECT column_name, value
+    FROM partial_grades
+    WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
+      AND partial_id = 4
+      AND student_matricula = ?
+      AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
+  `, [teacherId, semester, subject, matricula, group, group]);
+  const valMap = {};
+  for (const v of values) valMap[v.column_name] = parseFloat(v.value);
+
+  let total = 0, peso = 0;
+  for (const col of normalCols) {
+    const val = valMap[col.column_name];
+    if (val !== undefined && !isNaN(val)) {
+      const w = parseFloat(col.weight) || 0;
+      const max = parseFloat(col.max_value) || 10;
+      total += (val / max) * 10 * (w / 100);
+      peso += w;
+    }
+  }
+
+  const specialCol = columns.find(c => c.is_special === 1);
+  if (specialCol) {
+    const p1 = await calcularPromedioParcial(teacherId, semester, subject, group, 1, matricula);
+    const p2 = await calcularPromedioParcial(teacherId, semester, subject, group, 2, matricula);
+    const p3 = await calcularPromedioParcial(teacherId, semester, subject, group, 3, matricula);
+    const valores = [p1, p2, p3].filter(v => v !== null);
+    const promedioEspecial = valores.length > 0 ? valores.reduce((a,b)=>a+b,0)/valores.length : null;
+    if (promedioEspecial !== null) {
+      const w = parseFloat(specialCol.weight) || 0;
+      total += (promedioEspecial / 10) * 10 * (w / 100);
+      peso += w;
+    }
+  }
+  return peso > 0 ? parseFloat(total.toFixed(2)) : null;
+}
+
+// ----------------------------------------------------------------------
+// ENDPOINTS EXISTENTES (sin cambios)
+// ----------------------------------------------------------------------
 router.get('/teacher/subjects', async (req, res) => {
+  // ... (código original, sin modificar)
   try {
     const { teacherId, semester } = req.query;
     if (!teacherId) return res.status(400).json({ error: 'Teacher ID requerido' });
@@ -25,11 +115,10 @@ router.get('/teacher/subjects', async (req, res) => {
 });
 
 router.get('/subject/groups', async (req, res) => {
+  // ... (código original, sin modificar)
   try {
     const { teacherId, semester, subjectCode } = req.query;
-    if (!teacherId || !semester || !subjectCode) {
-      return res.status(400).json({ error: 'Parámetros incompletos' });
-    }
+    if (!teacherId || !semester || !subjectCode) return res.status(400).json({ error: 'Parámetros incompletos' });
     const [groups] = await db.query(`
       SELECT DISTINCT group_code, COUNT(*) as total_students
       FROM final_grades
@@ -43,7 +132,9 @@ router.get('/subject/groups', async (req, res) => {
   }
 });
 
-// Obtener materias que cursa un alumno
+// ----------------------------------------------------------------------
+// ENDPOINT PARA OBTENER MATERIAS DEL ALUMNO
+// ----------------------------------------------------------------------
 router.get('/student-subjects', async (req, res) => {
   try {
     const { matricula } = req.query;
@@ -60,7 +151,9 @@ router.get('/student-subjects', async (req, res) => {
   }
 });
 
-// Obtener calificaciones de un alumno para un parcial y materia específicos
+// ----------------------------------------------------------------------
+// ENDPOINT: CALIFICACIONES DE UN ALUMNO PARA UN PARCIAL (CON PROMEDIO)
+// ----------------------------------------------------------------------
 router.get('/student-grades', async (req, res) => {
   try {
     const { matricula, parcialId, subjectCode } = req.query;
@@ -68,57 +161,65 @@ router.get('/student-grades', async (req, res) => {
       return res.status(400).json({ error: 'Matrícula, parcialId y subjectCode son requeridos' });
     }
 
+    // Obtener datos de la materia (teacher_id, semester, group)
     const [subjectInfo] = await db.query(`
       SELECT teacher_id, semester_code, group_code
       FROM final_grades
       WHERE student_matricula = ? AND subject_code = ?
       LIMIT 1
     `, [matricula, subjectCode]);
-
     if (subjectInfo.length === 0) {
       return res.json({ columns: [], grades: [], promedio: null, materia: subjectCode });
     }
-
     const { teacher_id, semester_code, group_code } = subjectInfo[0];
 
-    const [columns] = await db.query(`
+    // Columnas reales (is_special = 0)
+    const [realColumns] = await db.query(`
       SELECT column_name, weight, max_value
       FROM partial_columns_config
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
-        AND (group_code = ? OR group_code IS NULL)
         AND partial_id = ?
+        AND is_special = 0
+        AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
       ORDER BY display_order
-    `, [teacher_id, semester_code, subjectCode, group_code, parcialId]);
+    `, [teacher_id, semester_code, subjectCode, parcialId, group_code, group_code]);
 
-    let grades = [];
-    if (columns.length > 0) {
-      const columnNames = columns.map(c => c.column_name);
-      const placeholders = columnNames.map(() => '?').join(',');
+    // Valores reales
+    let colValues = [];
+    if (realColumns.length > 0) {
+      const colNames = realColumns.map(c => c.column_name);
       const [rows] = await db.query(`
         SELECT column_name, value
         FROM partial_grades
-        WHERE student_matricula = ? AND teacher_id = ? AND semester_code = ?
-          AND subject_code = ? AND (group_code = ? OR group_code IS NULL)
-          AND partial_id = ? AND column_name IN (${placeholders})
-      `, [matricula, teacher_id, semester_code, subjectCode, group_code, parcialId, ...columnNames]);
-      grades = rows;
+        WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
+          AND partial_id = ?
+          AND student_matricula = ?
+          AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
+          AND column_name IN (${colNames.map(() => '?').join(',')})
+      `, [teacher_id, semester_code, subjectCode, parcialId, matricula, group_code, group_code, ...colNames]);
+      colValues = rows;
     }
 
-    let total = 0, pesoTotal = 0;
-    for (const col of columns) {
-      const grade = grades.find(g => g.column_name === col.column_name);
-      const val = grade ? parseFloat(grade.value) : null;
-      if (val !== null && !isNaN(val)) {
-        total += (val / col.max_value) * 10 * (col.weight / 100);
-        pesoTotal += col.weight;
-      }
-    }
-    const promedio = pesoTotal > 0 ? parseFloat(total.toFixed(2)) : null;
+    // Calcular el promedio del parcial (columna virtual)
+    const promedioParcial = await calcularPromedioParcial(teacher_id, semester_code, subjectCode, group_code, parcialId, matricula);
+
+    // Construir respuesta: columnas reales + una columna extra "📊 Promedio Parcial"
+    const columns = [...realColumns];
+    columns.push({
+      column_name: '📊 Promedio Parcial',
+      weight: 0,
+      max_value: 10,
+      is_special: false
+    });
+
+    // Asignar valores (incluyendo el promedio calculado)
+    const grades = colValues.map(g => ({ columnName: g.column_name, value: g.value }));
+    grades.push({ columnName: '📊 Promedio Parcial', value: promedioParcial });
 
     res.json({
       columns: columns.map(c => ({ name: c.column_name, maxValue: c.max_value, weight: c.weight })),
-      grades: grades.map(g => ({ columnName: g.column_name, value: g.value })),
-      promedio,
+      grades: grades,
+      promedio: promedioParcial,
       materia: subjectCode
     });
   } catch (error) {
@@ -127,7 +228,9 @@ router.get('/student-grades', async (req, res) => {
   }
 });
 
-// Obtener calificación final de un alumno para una materia (pestaña final)
+// ----------------------------------------------------------------------
+// ENDPOINT: CALIFICACIÓN FINAL DEL ALUMNO (CON PROMEDIO DE PARCIALES Y FINAL GLOBAL)
+// ----------------------------------------------------------------------
 router.get('/student-final', async (req, res) => {
   try {
     const { matricula, subjectCode } = req.query;
@@ -135,98 +238,85 @@ router.get('/student-final', async (req, res) => {
       return res.status(400).json({ error: 'Matrícula y materia requeridas' });
     }
 
-    const [info] = await db.query(`
+    const [subjectInfo] = await db.query(`
       SELECT teacher_id, semester_code, group_code
       FROM final_grades
       WHERE student_matricula = ? AND subject_code = ?
       LIMIT 1
     `, [matricula, subjectCode]);
-    if (info.length === 0) {
+    if (subjectInfo.length === 0) {
       return res.json({ columns: [], grades: [], promedio: null, materia: subjectCode });
     }
-    const { teacher_id, semester_code, group_code } = info[0];
+    const { teacher_id, semester_code, group_code } = subjectInfo[0];
 
-    // Obtener columnas de la pestaña final (partial_id=4)
-    const [columns] = await db.query(`
-      SELECT column_name, weight, max_value, is_special
+    // 1. Columnas reales (normales) de la pestaña final (partial_id=4, is_special=0)
+    const [realColumns] = await db.query(`
+      SELECT column_name, weight, max_value
       FROM partial_columns_config
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
-        AND (group_code = ? OR group_code IS NULL)
         AND partial_id = 4
+        AND is_special = 0
+        AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
       ORDER BY display_order
-    `, [teacher_id, semester_code, subjectCode, group_code]);
+    `, [teacher_id, semester_code, subjectCode, group_code, group_code]);
 
-    // Obtener calificaciones del alumno para esas columnas (excluyendo la especial, que se calculará)
-    let grades = [];
-    if (columns.length > 0) {
-      const normalColumns = columns.filter(c => !c.is_special);
-      if (normalColumns.length > 0) {
-        const columnNames = normalColumns.map(c => c.column_name);
-        const placeholders = columnNames.map(() => '?').join(',');
-        const [rows] = await db.query(`
-          SELECT column_name, value
-          FROM partial_grades
-          WHERE student_matricula = ? AND teacher_id = ? AND semester_code = ?
-            AND subject_code = ? AND (group_code = ? OR group_code IS NULL)
-            AND partial_id = 4 AND column_name IN (${placeholders})
-        `, [matricula, teacher_id, semester_code, subjectCode, group_code, ...columnNames]);
-        grades = rows;
-      }
+    // 2. Valores reales
+    let colValues = [];
+    if (realColumns.length > 0) {
+      const colNames = realColumns.map(c => c.column_name);
+      const [rows] = await db.query(`
+        SELECT column_name, value
+        FROM partial_grades
+        WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
+          AND partial_id = 4
+          AND student_matricula = ?
+          AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
+          AND column_name IN (${colNames.map(() => '?').join(',')})
+      `, [teacher_id, semester_code, subjectCode, matricula, group_code, group_code, ...colNames]);
+      colValues = rows;
     }
 
-    // Calcular promedio ponderado de la pestaña final, incluyendo la columna especial
-    let total = 0, pesoTotal = 0;
-    for (const col of columns) {
-      let val = null;
-      if (col.is_special) {
-        // Promedio de los tres parciales
-        const [proms] = await db.query(`
-          SELECT value FROM partial_grades
-          WHERE student_matricula = ? AND teacher_id = ? AND semester_code = ?
-            AND subject_code = ? AND (group_code = ? OR group_code IS NULL)
-            AND partial_id IN (1,2,3) AND column_name = '__promedio'
-        `, [matricula, teacher_id, semester_code, subjectCode, group_code]);
-        if (proms.length === 3) {
-          const suma = proms.reduce((s, p) => s + (parseFloat(p.value) || 0), 0);
-          val = suma / 3;
-        } else {
-          val = null;
-        }
-      } else {
-        const grade = grades.find(g => g.column_name === col.column_name);
-        val = grade ? parseFloat(grade.value) : null;
-      }
-      if (val !== null && !isNaN(val)) {
-        total += (val / col.max_value) * 10 * (col.weight / 100);
-        pesoTotal += col.weight;
-      }
-    }
-    const promedioFinal = pesoTotal > 0 ? parseFloat(total.toFixed(2)) : null;
+    // 3. Columna especial (Promedio de Parciales)
+    // Obtener promedios de los tres parciales
+    const p1 = await calcularPromedioParcial(teacher_id, semester_code, subjectCode, group_code, 1, matricula);
+    const p2 = await calcularPromedioParcial(teacher_id, semester_code, subjectCode, group_code, 2, matricula);
+    const p3 = await calcularPromedioParcial(teacher_id, semester_code, subjectCode, group_code, 3, matricula);
+    const valoresParciales = [p1, p2, p3].filter(v => v !== null);
+    const promedioEspecial = valoresParciales.length > 0 ? valoresParciales.reduce((a,b)=>a+b,0)/valoresParciales.length : null;
 
-    // Enviar también el valor de la columna especial en el array de grades para que se muestre
-    const specialColumn = columns.find(c => c.is_special);
-    let specialValue = null;
-    if (specialColumn) {
-      const [proms] = await db.query(`
-        SELECT value FROM partial_grades
-        WHERE student_matricula = ? AND teacher_id = ? AND semester_code = ?
-          AND subject_code = ? AND (group_code = ? OR group_code IS NULL)
-          AND partial_id IN (1,2,3) AND column_name = '__promedio'
-      `, [matricula, teacher_id, semester_code, subjectCode, group_code]);
-      if (proms.length === 3) {
-        const suma = proms.reduce((s, p) => s + (parseFloat(p.value) || 0), 0);
-        specialValue = suma / 3;
-      }
-    }
-    const allGrades = [...grades];
-    if (specialColumn && specialValue !== null) {
-      allGrades.push({ columnName: specialColumn.column_name, value: specialValue });
-    }
+    // 4. Calificar final global
+    const finalGlobal = await calcularFinalGlobal(teacher_id, semester_code, subjectCode, group_code, matricula);
+
+    // 5. Construir respuesta (columnas: especial, reales, final global)
+    const columns = [];
+    // Columna especial
+    columns.push({
+      column_name: 'Promedio de Parciales',
+      weight: 0,
+      max_value: 10,
+      is_special: true
+    });
+    // Reales
+    columns.push(...realColumns);
+    // Columna final global
+    columns.push({
+      column_name: '🎯 CALIFICACIÓN FINAL GLOBAL',
+      weight: 0,
+      max_value: 10,
+      is_special: false
+    });
+
+    // Asignar valores
+    const grades = [
+      { columnName: 'Promedio de Parciales', value: promedioEspecial },
+      ...colValues.map(g => ({ columnName: g.column_name, value: g.value })),
+      { columnName: '🎯 CALIFICACIÓN FINAL GLOBAL', value: finalGlobal }
+    ];
 
     res.json({
       columns: columns.map(c => ({ name: c.column_name, maxValue: c.max_value, weight: c.weight, isSpecial: c.is_special })),
-      grades: allGrades,
-      promedio: promedioFinal,
+      grades: grades,
+      promedio: finalGlobal,
       materia: subjectCode
     });
   } catch (error) {

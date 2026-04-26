@@ -7,8 +7,9 @@ function AlumnoDashboard() {
   const [activeTab, setActiveTab] = useState(1);
   const [materias, setMaterias] = useState([]);
   const [selectedMateria, setSelectedMateria] = useState('');
-  const [calificaciones, setCalificaciones] = useState({ columns: [], grades: [], promedio: null, materia: null });
-  const [finalData, setFinalData] = useState({ columns: [], grades: [], promedio: null, materia: null });
+  const [data, setData] = useState([]);
+  const [columns, setColumns] = useState([]);
+  const [promedio, setPromedio] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingMaterias, setLoadingMaterias] = useState(true);
 
@@ -33,46 +34,72 @@ function AlumnoDashboard() {
     cargarMaterias();
   }, [user?.matricula]);
 
-  // Cargar calificaciones de parcial (1-3)
-  const cargarCalificaciones = useCallback(async (parcialId, subjectCode) => {
+  // Cargar datos según la pestaña (parcial o final)
+  const cargarParcial = useCallback(async (parcialId, subjectCode) => {
     setLoading(true);
     try {
       const response = await api.get('/grades/student-grades', {
         params: { matricula: user.matricula, parcialId, subjectCode }
       });
-      setCalificaciones(response.data);
+      // La respuesta trae columns y grades
+      const cols = response.data.columns || [];
+      const grades = response.data.grades || [];
+      const prom = response.data.promedio;
+      setColumns(cols);
+      setPromedio(prom);
+      // Transformar grades a un mapa accesible por nombre de columna
+      const gradesMap = {};
+      grades.forEach(g => { gradesMap[g.columnName] = g.value; });
+      // Construir una sola fila para este alumno (el dashboard solo muestra un alumno)
+      const row = [user.matricula, user.firstName + ' ' + user.lastName];
+      cols.forEach(col => {
+        const val = gradesMap[col.name];
+        row.push(val !== undefined && val !== null ? parseFloat(val).toFixed(2) : '');
+      });
+      setData([row]);
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
     }
-  }, [user?.matricula]);
+  }, [user?.matricula, user?.firstName, user?.lastName]);
 
-  // Cargar calificación final
   const cargarFinal = useCallback(async (subjectCode) => {
     setLoading(true);
     try {
       const response = await api.get('/grades/student-final', {
         params: { matricula: user.matricula, subjectCode }
       });
-      setFinalData(response.data);
+      const cols = response.data.columns || [];
+      const grades = response.data.grades || [];
+      const prom = response.data.promedio;
+      setColumns(cols);
+      setPromedio(prom);
+      const gradesMap = {};
+      grades.forEach(g => { gradesMap[g.columnName] = g.value; });
+      const row = [user.matricula, user.firstName + ' ' + user.lastName];
+      cols.forEach(col => {
+        const val = gradesMap[col.name];
+        row.push(val !== undefined && val !== null ? parseFloat(val).toFixed(2) : '');
+      });
+      setData([row]);
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
     }
-  }, [user?.matricula]);
+  }, [user?.matricula, user?.firstName, user?.lastName]);
 
-  // Efectos para cargar según pestaña
+  // Cuando cambia la materia o la pestaña, cargar los datos
   useEffect(() => {
     if (selectedMateria && user?.matricula) {
       if (activeTab === 4) {
         cargarFinal(selectedMateria);
       } else {
-        cargarCalificaciones(activeTab, selectedMateria);
+        cargarParcial(activeTab, selectedMateria);
       }
     }
-  }, [activeTab, selectedMateria, user?.matricula, cargarCalificaciones, cargarFinal]);
+  }, [activeTab, selectedMateria, user?.matricula, cargarParcial, cargarFinal]);
 
   const tabs = [
     { id: 1, label: '📘 Parcial 1' },
@@ -83,103 +110,64 @@ function AlumnoDashboard() {
 
   const renderTabContent = () => {
     if (loading) return <div className="text-center py-8">Cargando...</div>;
-
-    if (activeTab !== 4) {
-      const { columns, grades, promedio, materia } = calificaciones;
-      if (columns.length === 0) {
-        return (
-          <div className="text-center py-8 text-gray-500">
-            No hay actividades configuradas para este parcial o aún no se han registrado calificaciones.
-            <p className="text-sm mt-2">Materia: {materia || selectedMateria}</p>
-          </div>
-        );
-      }
+    if (columns.length === 0) {
       return (
-        <div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border rounded-lg overflow-hidden">
-              <thead className="bg-gray-100">
-                <tr><th className="border px-4 py-2 text-left">Actividad</th><th className="border px-4 py-2 text-center">Calificación</th><th className="border px-4 py-2 text-center">Peso (%)</th><th className="border px-4 py-2 text-center">Valor Máx.</th></tr>
-              </thead>
-              <tbody>
-                {columns.map(col => {
-                  const grade = grades.find(g => g.columnName === col.name);
-                  let bgColor = '', textColor = '';
-                  const val = grade?.value !== undefined && grade?.value !== null ? parseFloat(grade.value) : null;
-                  if (val !== null) {
-                    if (val >= 9) { bgColor = 'bg-green-100'; textColor = 'text-green-800'; }
-                    else if (val >= 6) { bgColor = 'bg-yellow-100'; textColor = 'text-yellow-800'; }
-                    else { bgColor = 'bg-red-100'; textColor = 'text-red-800'; }
-                  }
-                  return (
-                    <tr key={col.name} className="hover:bg-gray-50">
-                      <td className="border px-4 py-2 font-medium">{col.name}</td>
-                      <td className={`border px-4 py-2 text-center font-semibold ${bgColor} ${textColor}`}>
-                        {val !== null ? val.toFixed(2) : '—'}
-                      </td>
-                      <td className="border px-4 py-2 text-center">{col.weight}%</td>
-                      <td className="border px-4 py-2 text-center">{col.maxValue}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg flex justify-between items-center">
-            <p className="text-lg font-semibold">📊 Calificación Final del Parcial:</p>
-            <p className="text-3xl font-bold text-blue-700">{promedio !== null ? promedio.toFixed(2) : 'N/A'}</p>
-          </div>
-        </div>
-      );
-    } else {
-      // Pestaña final
-      const { columns, grades, promedio, materia } = finalData;
-      if (columns.length === 0) {
-        return (
-          <div className="text-center py-8 text-gray-500">
-            No hay configuración para la calificación final en esta materia.
-            <p className="text-sm mt-2">Materia: {materia || selectedMateria}</p>
-          </div>
-        );
-      }
-      return (
-        <div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border rounded-lg overflow-hidden">
-              <thead className="bg-gray-100">
-                <tr><th className="border px-4 py-2 text-left">Actividad</th><th className="border px-4 py-2 text-center">Calificación</th><th className="border px-4 py-2 text-center">Peso (%)</th><th className="border px-4 py-2 text-center">Valor Máx.</th></tr>
-              </thead>
-              <tbody>
-                {columns.map(col => {
-                  const grade = grades.find(g => g.columnName === col.name);
-                  let bgColor = '', textColor = '';
-                  const val = grade?.value !== undefined && grade?.value !== null ? parseFloat(grade.value) : null;
-                  if (val !== null) {
-                    if (val >= 9) { bgColor = 'bg-green-100'; textColor = 'text-green-800'; }
-                    else if (val >= 6) { bgColor = 'bg-yellow-100'; textColor = 'text-yellow-800'; }
-                    else { bgColor = 'bg-red-100'; textColor = 'text-red-800'; }
-                  }
-                  return (
-                    <tr key={col.name} className="hover:bg-gray-50">
-                      <td className="border px-4 py-2 font-medium">{col.name}{col.isSpecial ? ' ⭐' : ''}</td>
-                      <td className={`border px-4 py-2 text-center font-semibold ${bgColor} ${textColor}`}>
-                        {val !== null ? val.toFixed(2) : '—'}
-                      </td>
-                      <td className="border px-4 py-2 text-center">{col.weight}%</td>
-                      <td className="border px-4 py-2 text-center">{col.maxValue}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-6 p-4 bg-green-50 rounded-lg flex justify-between items-center">
-            <p className="text-lg font-semibold">🎯 Calificación Final Global:</p>
-            <p className="text-3xl font-bold text-green-700">{promedio !== null ? promedio.toFixed(2) : 'N/A'}</p>
-          </div>
+        <div className="text-center py-8 text-gray-500">
+          No hay actividades configuradas para esta evaluación.
+          <p className="text-sm mt-2">Materia: {selectedMateria}</p>
         </div>
       );
     }
+    return (
+      <div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border rounded-lg overflow-hidden">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="border px-4 py-2 text-left">Matrícula</th>
+                <th className="border px-4 py-2 text-left">Alumno</th>
+                {columns.map(col => (
+                  <th key={col.name} className="border px-4 py-2 text-center">
+                    {col.name}{col.isSpecial ? ' ⭐' : ''}
+                    <span className="text-xs block font-normal">
+                      ({col.weight}% / {col.maxValue})
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, rowIdx) => (
+                <tr key={rowIdx} className="hover:bg-gray-50">
+                  {row.map((cell, cellIdx) => {
+                    let bgColor = '', textColor = '';
+                    if (cellIdx >= 2 && !isNaN(parseFloat(cell))) {
+                      const val = parseFloat(cell);
+                      if (val >= 9) { bgColor = 'bg-green-100'; textColor = 'text-green-800'; }
+                      else if (val >= 6) { bgColor = 'bg-yellow-100'; textColor = 'text-yellow-800'; }
+                      else if (val !== '') { bgColor = 'bg-red-100'; textColor = 'text-red-800'; }
+                    }
+                    return (
+                      <td key={cellIdx} className={`border px-4 py-2 ${cellIdx === 0 || cellIdx === 1 ? 'font-medium' : 'text-center'} ${bgColor} ${textColor}`}>
+                        {cell !== '' ? cell : '—'}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg flex justify-between items-center">
+          <p className="text-lg font-semibold">
+            {activeTab === 4 ? '🎯 Calificación Final Global:' : '📊 Calificación Final del Parcial:'}
+          </p>
+          <p className="text-3xl font-bold text-blue-700">
+            {promedio !== null ? promedio.toFixed(2) : 'N/A'}
+          </p>
+        </div>
+      </div>
+    );
   };
 
   return (
