@@ -14,33 +14,44 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
   const [saving, setSaving] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const hotRef = useRef(null);
-  const updating = useRef(false); // bandera para evitar recursión
 
   const safeColumns = () => (Array.isArray(columns) ? columns.filter(c => c && typeof c === 'object') : []);
 
-  useEffect(() => { loadConfig(); }, [partialId, semester, subject, group, teacherId]);
+  useEffect(() => {
+    loadConfig();
+  }, [partialId, semester, subject, group, teacherId]);
 
   const loadConfig = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/partials/config', { params: { teacherId, semester, subject, group, partialId } });
+      const params = { teacherId, semester, subject, partialId };
+      if (group && group !== '') params.group = group;
+      const res = await api.get('/partials/config', { params });
       let cols = res.data.columns || [];
       if (!Array.isArray(cols)) cols = [];
       const valid = cols.filter(c => c && typeof c === 'object');
-      if (valid.length === 0 && !showConfig) { setShowConfig(true); setLoading(false); return; }
+      if (valid.length === 0 && !showConfig) {
+        setShowConfig(true);
+        setLoading(false);
+        return;
+      }
       setColumns(valid);
       await loadGrades(valid);
-    } catch (error) { console.error(error); setLoading(false); }
+    } catch (error) {
+      console.error(error);
+      setLoading(false);
+    }
   };
 
   const loadGrades = async (cols) => {
     try {
-      const res = await api.get('/partials/grades', { params: { teacherId, semester, subject, group, partialId } });
+      const params = { teacherId, semester, subject, partialId };
+      if (group && group !== '') params.group = group;
+      const res = await api.get('/partials/grades', { params });
       const raw = res.data.grades || [];
       const cfg = res.data.columns || [];
       const validCfg = Array.isArray(cfg) ? cfg.filter(c => c && typeof c === 'object') : [];
-      
-      let tableData = raw.map(g => {
+      const table = raw.map(g => {
         const row = [g.matricula, g.nombre];
         validCfg.forEach(col => {
           const val = g[`col_${col.column_name}`];
@@ -49,98 +60,114 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
         });
         return row;
       });
-
-      // Calcular nota final para cada fila (si no es la pestaña final)
-      if (partialId !== 4) {
-        tableData = tableData.map(row => {
-          const finalValue = calcularNotaFinal(row, validCfg);
-          row.push(finalValue !== null ? finalValue.toFixed(2) : '');
-          return row;
-        });
-      } else {
-        // En la pestaña final, la última columna es la calificación global (añadida por buildColumns)
-        tableData = tableData.map(row => row);
-      }
-      
-      setData(tableData);
-    } catch (error) { console.error(error); alert('Error al cargar calificaciones'); } finally { setLoading(false); }
+      setData(table);
+    } catch (error) {
+      console.error(error);
+      alert('Error al cargar calificaciones');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const calcularNotaFinal = (rowData, cols) => {
-    let total = 0, peso = 0;
+  const calcularPromedioParcial = (rowData, cols) => {
+    let total = 0, pesoTotal = 0;
     for (let i = 0; i < cols.length; i++) {
       const val = parseFloat(rowData[2 + i]);
       if (!isNaN(val) && val !== '') {
-        const w = parseFloat(cols[i].weight) || 0;
-        const max = parseFloat(cols[i].max_value) || 10;
-        total += (val / max) * 10 * (w / 100);
-        peso += w;
+        const weight = parseFloat(cols[i].weight) || 0;
+        const maxValue = parseFloat(cols[i].max_value) || 10;
+        total += (val / maxValue) * 10 * (weight / 100);
+        pesoTotal += weight;
       }
     }
-    return peso > 0 ? parseFloat(total.toFixed(2)) : null;
+    return pesoTotal > 0 ? parseFloat(total.toFixed(2)) : null;
+  };
+
+  const calcularCalificacionFinal = (rowData, cols) => {
+    let total = 0, pesoTotal = 0;
+    for (let i = 0; i < cols.length; i++) {
+      const val = parseFloat(rowData[2 + i]);
+      if (!isNaN(val) && val !== '') {
+        const weight = parseFloat(cols[i].weight) || 0;
+        const maxValue = parseFloat(cols[i].max_value) || 10;
+        total += (val / maxValue) * 10 * (weight / 100);
+        pesoTotal += weight;
+      }
+    }
+    return pesoTotal > 0 ? parseFloat(total.toFixed(2)) : null;
   };
 
   const afterChange = (changes, source) => {
-    if (!changes || source === 'loadData' || source === 'autoFinal') return;
-    if (updating.current) return;
-
+    if (!changes || source === 'loadData') return;
     const hot = hotRef.current?.hotInstance;
     if (!hot) return;
     const safe = safeColumns();
     const affectedRows = new Set(changes.map(c => c[0]));
-
-    // Programar la actualización de los promedios después de que termine la edición actual
-    requestAnimationFrame(() => {
-      if (updating.current) return;
-      updating.current = true;
-      for (let row of affectedRows) {
-        const cur = hot.getDataAtRow(row);
-        const finalColIndex = 2 + safe.length; // índice de la columna de promedio
-        const nota = calcularNotaFinal(cur, safe);
-        hot.setDataAtCell(row, finalColIndex, nota !== null ? nota.toFixed(2) : '', 'autoFinal');
+    for (let row of affectedRows) {
+      const currentRow = hot.getDataAtRow(row);
+      if (partialId !== 4) {
+        const promedioColIndex = 2 + safe.length;
+        const nuevoPromedio = calcularPromedioParcial(currentRow, safe);
+        const nuevoVal = nuevoPromedio !== null ? nuevoPromedio.toFixed(2) : '';
+        hot.setDataAtCell(row, promedioColIndex, nuevoVal, 'autoAverage');
+      } else {
+        const finalColIndex = 2 + safe.length;
+        const nuevaFinal = calcularCalificacionFinal(currentRow, safe);
+        const nuevoVal = nuevaFinal !== null ? nuevaFinal.toFixed(2) : '';
+        hot.setDataAtCell(row, finalColIndex, nuevoVal, 'autoFinal');
       }
-      updating.current = false;
-    });
+    }
   };
 
-  const handleSaveConfig = async (newCols) => {
+  const handleSaveConfig = async (newColumns) => {
+    setSaving(true);
     try {
-      await api.post('/partials/config', { teacherId, semester, subject, group, partialId, columns: newCols });
-      setShowConfig(false);
-      loadConfig();
+      await api.post('/partials/config', {
+        teacherId, semester, subject, group, partialId, columns: newColumns
+      });
       alert('Configuración guardada');
-    } catch (error) { alert('Error al guardar configuración'); }
+      setShowConfig(false);
+      await loadConfig(); // recarga configuración y calificaciones
+    } catch (error) {
+      console.error(error);
+      alert('Error al guardar configuración: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveGrades = async () => {
     setSaving(true);
     try {
       const hot = hotRef.current.hotInstance;
-      const rows = hot.getData();
+      const tableData = hot.getData();
       const values = [];
       const safe = safeColumns();
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const mat = row[0];
-        // Guardar columnas normales (excluyendo la columna final)
-        for (let j = 0; j < safe.length; j++) {
-          const col = safe[j];
+      for (let rowIdx = 0; rowIdx < tableData.length; rowIdx++) {
+        const row = tableData[rowIdx];
+        const matricula = row[0];
+        for (let colIdx = 0; colIdx < safe.length; colIdx++) {
+          const col = safe[colIdx];
           if (partialId === 4 && col.is_special) continue;
-          const val = row[2 + j];
-          const toStore = (val !== '' && !isNaN(parseFloat(val))) ? val.toString() : null;
-          values.push({ matricula: mat, columnName: col.column_name, value: toStore });
+          const val = row[2 + colIdx];
+          const valueToStore = (val !== '' && !isNaN(parseFloat(val))) ? val.toString() : null;
+          values.push({ matricula, columnName: col.column_name, value: valueToStore });
         }
-        // Guardar la nota final del parcial (si no es la pestaña final)
         if (partialId !== 4) {
-          const finalVal = row[2 + safe.length];
-          const nota = (finalVal !== '' && !isNaN(parseFloat(finalVal))) ? parseFloat(finalVal) : null;
-          values.push({ matricula: mat, columnName: '__promedio', value: nota !== null ? nota.toString() : null });
+          const promedioVal = row[2 + safe.length];
+          const promedio = (promedioVal !== '' && !isNaN(parseFloat(promedioVal))) ? parseFloat(promedioVal) : null;
+          values.push({ matricula, columnName: '__promedio', value: promedio !== null ? promedio.toString() : null });
         }
       }
       await api.post('/partials/save-grades', { teacherId, semester, subject, group, partialId, values });
       alert('Calificaciones guardadas');
       await loadConfig();
-    } catch (error) { console.error(error); alert('Error al guardar'); } finally { setSaving(false); }
+    } catch (error) {
+      console.error(error);
+      alert('Error al guardar calificaciones');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const buildColumns = () => {
@@ -160,14 +187,23 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
       });
     });
     if (partialId !== 4) {
-      base.push({ data: 2 + safe.length, title: '📊 Calificación Final del Parcial', readOnly: true, type: 'numeric', numericFormat: { pattern: '0.00' }, width: 180 });
+      base.push({ data: 2 + safe.length, title: '📊 Promedio Parcial', readOnly: true, type: 'numeric', numericFormat: { pattern: '0.00' }, width: 120 });
     } else {
-      base.push({ data: 2 + safe.length, title: '🎯 CALIFICACIÓN FINAL GLOBAL', readOnly: true, type: 'numeric', numericFormat: { pattern: '0.00' }, width: 200 });
+      base.push({ data: 2 + safe.length, title: '🎯 CALIFICACIÓN FINAL GLOBAL', readOnly: true, type: 'numeric', numericFormat: { pattern: '0.00' }, width: 150 });
     }
     return base;
   };
 
-  if (showConfig) return <ColumnConfig columns={columns} onSave={handleSaveConfig} onCancel={() => setShowConfig(false)} showSpecialColumn={showSpecial} />;
+  if (showConfig) {
+    return (
+      <ColumnConfig
+        columns={columns}
+        onSave={handleSaveConfig}
+        onCancel={() => setShowConfig(false)}
+        showSpecialColumn={showSpecial}
+      />
+    );
+  }
   if (loading) return <div className="text-center py-8">Cargando...</div>;
 
   return (
@@ -183,8 +219,8 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
       </div>
       <div className="text-sm text-gray-500 mb-2">
         {partialId !== 4
-          ? '📊 La columna "Calificación Final del Parcial" se calcula automáticamente con los pesos asignados.'
-          : '⭐ La columna "Promedio de Parciales" es automática (promedio de los tres parciales) y su peso es configurable. La calificación global suma todas las columnas.'}
+          ? '📊 La columna "Promedio Parcial" se calcula automáticamente al editar las notas.'
+          : '⭐ La calificación final global se calcula automáticamente.'}
       </div>
       <div className="overflow-x-auto">
         <HotTable
