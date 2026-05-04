@@ -102,6 +102,10 @@ function GradesViewer() {
           const val = g[`col_${col.column_name}`];
           row.push(val !== null ? parseFloat(val).toFixed(2) : '');
         });
+        // Agregar estado derivado de la calificación final? La columna final ya está en columnsData.
+        // Pero asumimos que la columna final es la última o la especial. 
+        // Como ya tenemos la columna "🎯 CALIFICACIÓN FINAL GLOBAL" en columnsData, no necesitamos estado extra.
+        // Simplemente usamos los colores en la celda final.
         return row;
       });
       setGrades(tableData);
@@ -154,6 +158,13 @@ function GradesViewer() {
     });
     return base;
   };
+
+  // Calcular índices de columnas finales (para colores)
+  // La última columna es la calificación final (si es que el backend la envía). 
+  // En nuestro backend, para partialId=4 se envía una columna "🎯 CALIFICACIÓN FINAL GLOBAL" que es la última.
+  // La columna de estado no existe en el admin porque no la pedimos. Podemos agregarla si queremos.
+  // Por simplicidad, solo coloreamos la columna final (que es la última de la tabla).
+  const finalColIndex = 2 + columns.length - 1; // última columna
 
   return (
     <div className="space-y-6">
@@ -262,6 +273,35 @@ function GradesViewer() {
             filters={true}
             dropdownMenu={true}
             columnSorting={true}
+            cells={(row, col) => {
+              const cellProperties = {};
+              // Colorear la columna final (la última)
+              if (col === finalColIndex) {
+                cellProperties.renderer = function(instance, td, row, col, prop, value) {
+                  td.innerHTML = value !== null && value !== '' ? parseFloat(value).toFixed(2) : 'N/A';
+                  td.style.fontWeight = 'bold';
+                  td.style.textAlign = 'center';
+                  if (value !== null && value !== '' && !isNaN(parseFloat(value))) {
+                    const val = parseFloat(value);
+                    if (val >= 9) {
+                      td.style.backgroundColor = '#10b981';
+                      td.style.color = 'white';
+                    } else if (val >= 6) {
+                      td.style.backgroundColor = '#3b82f6';
+                      td.style.color = 'white';
+                    } else {
+                      td.style.backgroundColor = '#ef4444';
+                      td.style.color = 'white';
+                    }
+                  } else {
+                    td.style.backgroundColor = '#fef3c7';
+                    td.style.color = '#92400e';
+                  }
+                  return td;
+                };
+              }
+              return cellProperties;
+            }}
           />
         )}
       </div>

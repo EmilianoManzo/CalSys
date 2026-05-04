@@ -4,29 +4,75 @@ import db from '../config/database.js';
 
 const router = express.Router();
 
-// ============================================
-// ESTADÍSTICAS
-// ============================================
 router.get('/stats', async (req, res) => {
   try {
     const [totalStudents] = await db.query(`SELECT COUNT(*) as total FROM students WHERE status = 'active'`);
     const [totalTeachers] = await db.query(`SELECT COUNT(*) as total FROM users WHERE role IN ('maestro', 'admin', 'director') AND status = 'active' AND is_active = 1`);
     const [totalSubjects] = await db.query(`SELECT COUNT(DISTINCT subject_code) as total FROM final_grades`);
-    const [totalGrades] = await db.query(`SELECT COUNT(*) as total FROM final_grades WHERE final_grade IS NOT NULL`);
-    const [averageGrade] = await db.query(`SELECT ROUND(AVG(final_grade), 2) as promedio FROM final_grades WHERE final_grade IS NOT NULL`);
-    const [passedCount] = await db.query(`SELECT COUNT(*) as total FROM final_grades WHERE status = 'passed'`);
-    const [failedCount] = await db.query(`SELECT COUNT(*) as total FROM final_grades WHERE status = 'failed'`);
-    const [inProgressCount] = await db.query(`SELECT COUNT(*) as total FROM final_grades WHERE status = 'in_progress' OR final_grade IS NULL`);
+    const [totalGrades] = await db.query(`SELECT COUNT(*) as total FROM partial_grades WHERE column_name NOT IN ('__promedio', '📊 Promedio Parcial', '🎯 CALIFICACIÓN FINAL GLOBAL')`);
     
+    // Promedio general usando valores reales de partial_grades
+    const [avgResult] = await db.query(`
+      SELECT ROUND(AVG((pg.value / pc.max_value) * 10), 2) as promedio
+      FROM partial_grades pg
+      JOIN partial_columns_config pc ON pg.column_name = pc.column_name 
+        AND pg.teacher_id = pc.teacher_id 
+        AND pg.semester_code = pc.semester_code 
+        AND pg.subject_code = pc.subject_code
+        AND pg.partial_id = pc.partial_id
+      WHERE pg.value IS NOT NULL AND pg.column_name != '__promedio'
+    `);
+    const average = avgResult[0]?.promedio || 0;
+
+    // Estudiantes con al menos una calificación de parcial (tienen __promedio)
+    const [studentsWithGrades] = await db.query(`SELECT COUNT(DISTINCT student_matricula) as total FROM partial_grades WHERE column_name = '__promedio' AND value IS NOT NULL`);
+    const totalStudentsWithGrades = studentsWithGrades[0].total;
+
+    // Clasificación por promedio final (promedio de los tres parciales)
+    const [gradeStatus] = await db.query(`
+      SELECT 
+        student_matricula,
+        AVG(value) as promedio_final
+      FROM partial_grades
+      WHERE column_name = '__promedio' AND value IS NOT NULL
+      GROUP BY student_matricula
+    `);
+    let passed = 0, failed = 0;
+    for (const row of gradeStatus) {
+      const prom = parseFloat(row.promedio_final);
+      if (prom >= 6) passed++;
+      else if (prom < 6) failed++;
+    }
+    let inProgress = totalStudents[0].total - (passed + failed);
+    if (inProgress < 0) inProgress = 0;
+
+    // Estadísticas por materia (promedio por materia)
+    const [subjectStats] = await db.query(`
+      SELECT 
+        pg.subject_code,
+        COUNT(DISTINCT pg.student_matricula) as estudiantes,
+        ROUND(AVG((pg.value / pc.max_value) * 10), 2) as promedio
+      FROM partial_grades pg
+      JOIN partial_columns_config pc ON pg.column_name = pc.column_name 
+        AND pg.teacher_id = pc.teacher_id 
+        AND pg.semester_code = pc.semester_code 
+        AND pg.subject_code = pc.subject_code
+        AND pg.partial_id = pc.partial_id
+      WHERE pg.column_name != '__promedio' AND pg.value IS NOT NULL
+      GROUP BY pg.subject_code
+      ORDER BY promedio DESC
+    `);
+
     res.json({
       students: totalStudents[0].total,
       teachers: totalTeachers[0].total,
       subjects: totalSubjects[0].total,
       grades: totalGrades[0].total,
-      average: averageGrade[0].promedio || 0,
-      passed: passedCount[0].total,
-      failed: failedCount[0].total,
-      inProgress: inProgressCount[0].total
+      average: average,
+      passed: passed,
+      failed: failed,
+      inProgress: inProgress,
+      subjectStats: subjectStats
     });
   } catch (error) {
     console.error('Error obteniendo estadísticas:', error);
@@ -35,7 +81,7 @@ router.get('/stats', async (req, res) => {
 });
 
 // ============================================
-// GESTIÓN DE MATERIAS (catálogo)
+// ENDPOINTS PARA MATERIAS (CRUD COMPLETO)
 // ============================================
 router.get('/materias', async (req, res) => {
   try {
@@ -113,9 +159,6 @@ router.delete('/materias/:id', async (req, res) => {
   }
 });
 
-// ============================================
-// ASIGNACIÓN DE MATERIAS A PROFESORES
-// ============================================
 router.get('/profesores', async (req, res) => {
   try {
     const [profesores] = await db.query(`
@@ -217,7 +260,7 @@ router.get('/asignaciones', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINTS PARA EL ADMIN (calificaciones)
+// ENDPOINTS PARA CALIFICACIONES (necesarios para admin)
 // ============================================
 router.get('/subjects', async (req, res) => {
   try {
@@ -306,7 +349,7 @@ router.get('/semesters', async (req, res) => {
 });
 
 // ============================================
-// CRUD DE ESTUDIANTES
+// ENDPOINTS PARA ESTUDIANTES
 // ============================================
 router.get('/students', async (req, res) => {
   try {
@@ -370,7 +413,7 @@ router.delete('/students/:matricula', async (req, res) => {
 });
 
 // ============================================
-// CRUD DE USUARIOS (staff)
+// ENDPOINTS PARA USUARIOS (staff)
 // ============================================
 router.get('/users', async (req, res) => {
   try {

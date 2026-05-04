@@ -12,8 +12,10 @@
   "dependencies": {
     "@handsontable/react": "^16.2.0",
     "axios": "^1.13.5",
+    "chart.js": "^4.5.1",
     "handsontable": "^16.2.0",
     "react": "^19.2.0",
+    "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0"
   },
