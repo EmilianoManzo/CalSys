@@ -10,6 +10,7 @@ function AlumnoDashboard() {
   const [data, setData] = useState([]);
   const [columns, setColumns] = useState([]);
   const [promedio, setPromedio] = useState(null);
+  const [attendanceData, setAttendanceData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingMaterias, setLoadingMaterias] = useState(true);
 
@@ -90,26 +91,96 @@ function AlumnoDashboard() {
     }
   }, [user?.matricula, user?.firstName, user?.lastName]);
 
+  const cargarAsistencia = useCallback(async (subjectCode) => {
+    setLoading(true);
+    try {
+      const response = await api.get('/attendance/student', {
+        params: { matricula: user.matricula, subjectCode }
+      });
+      setAttendanceData(response.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.matricula]);
+
   // Cuando cambia la materia o la pestaña, cargar los datos
   useEffect(() => {
     if (selectedMateria && user?.matricula) {
-      if (activeTab === 4) {
+      if (activeTab === 5) {
+        cargarAsistencia(selectedMateria);
+      } else if (activeTab === 4) {
         cargarFinal(selectedMateria);
       } else {
         cargarParcial(activeTab, selectedMateria);
       }
     }
-  }, [activeTab, selectedMateria, user?.matricula, cargarParcial, cargarFinal]);
+  }, [activeTab, selectedMateria, user?.matricula, cargarParcial, cargarFinal, cargarAsistencia]);
 
   const tabs = [
     { id: 1, label: '📘 Parcial 1' },
     { id: 2, label: '📗 Parcial 2' },
     { id: 3, label: '📙 Parcial 3' },
-    { id: 4, label: '🎓 Calificación Final' }
+    { id: 4, label: '🎓 Calificación Final' },
+    { id: 5, label: '📅 Asistencia' }
   ];
 
   const renderTabContent = () => {
     if (loading) return <div className="text-center py-8">Cargando...</div>;
+    
+    if (activeTab === 5) {
+      if (!attendanceData || attendanceData.dates.length === 0) {
+        return (
+          <div className="text-center py-8 text-gray-500">
+            No hay registros de asistencia para esta materia.
+          </div>
+        );
+      }
+      return (
+        <div>
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="bg-blue-50 p-4 rounded-lg text-center">
+              <p className="text-sm text-gray-600">Clases Totales</p>
+              <p className="text-2xl font-bold text-blue-700">{attendanceData.summary.total}</p>
+            </div>
+            <div className="bg-green-50 p-4 rounded-lg text-center">
+              <p className="text-sm text-gray-600">Asistencias</p>
+              <p className="text-2xl font-bold text-green-700">{attendanceData.summary.attended}</p>
+            </div>
+            <div className="bg-indigo-50 p-4 rounded-lg text-center">
+              <p className="text-sm text-gray-600">Porcentaje</p>
+              <p className="text-2xl font-bold text-indigo-700">{attendanceData.summary.percentage}%</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full bg-white border rounded-lg overflow-hidden">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="border px-4 py-2 text-left">Fecha</th>
+                  <th className="border px-4 py-2 text-center">Asistió</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attendanceData.dates.map((d, idx) => (
+                  <tr key={d.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="border px-4 py-2 font-medium">{d.date}</td>
+                    <td className="border px-4 py-2 text-center">
+                      {d.present ? (
+                        <span className="text-green-600 font-bold">✔️ Sí</span>
+                      ) : (
+                        <span className="text-red-500 font-bold">❌ No</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
     if (columns.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">

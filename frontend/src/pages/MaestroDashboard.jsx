@@ -86,9 +86,7 @@ function MaestroDashboard() {
               <label className="block text-sm font-medium mb-2">Materia</label>
               <select value={subject} onChange={handleSubjectChange} className="w-full border rounded p-2" disabled={!subjectsList.length}>
                 {subjectsList.map(s => (
-                  <option key={s.subject_code} value={s.subject_code}>
-                    {s.subject_code} ({s.total_students} alumnos)
-                  </option>
+                  <option key={s.subject_code} value={s.subject_code}>{s.subject_code} ({s.total_students} alumnos)</option>
                 ))}
               </select>
             </div>
@@ -96,9 +94,7 @@ function MaestroDashboard() {
               <label className="block text-sm font-medium mb-2">Grupo</label>
               <select value={group} onChange={e => setGroup(e.target.value)} className="w-full border rounded p-2" disabled={!groupsList.length}>
                 {groupsList.map(g => (
-                  <option key={g.group_code} value={g.group_code}>
-                    Grupo {g.group_code} ({g.total_students} alumnos)
-                  </option>
+                  <option key={g.group_code} value={g.group_code}>Grupo {g.group_code} ({g.total_students} alumnos)</option>
                 ))}
               </select>
             </div>

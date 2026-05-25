@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import PartialGradesTable from './PartialGradesTable';
+import AttendanceTable from './AttendanceTable';
 
 function PartialManager({ semester, subject, group, teacherId }) {
   const [activeTab, setActiveTab] = useState(1);
@@ -7,7 +8,8 @@ function PartialManager({ semester, subject, group, teacherId }) {
     { id: 1, label: '📘 Parcial 1' },
     { id: 2, label: '📗 Parcial 2' },
     { id: 3, label: '📙 Parcial 3' },
-    { id: 4, label: '🎓 Calificación Final' }
+    { id: 4, label: '🎓 Calificación Final' },
+    { id: 5, label: '📅 Asistencia' }
   ];
   return (
     <div>
@@ -31,6 +33,7 @@ function PartialManager({ semester, subject, group, teacherId }) {
         {activeTab === 2 && <PartialGradesTable partialId={2} semester={semester} subject={subject} group={group} teacherId={teacherId} showSpecial={false} />}
         {activeTab === 3 && <PartialGradesTable partialId={3} semester={semester} subject={subject} group={group} teacherId={teacherId} showSpecial={false} />}
         {activeTab === 4 && <PartialGradesTable partialId={4} semester={semester} subject={subject} group={group} teacherId={teacherId} showSpecial={true} />}
+        {activeTab === 5 && <AttendanceTable semester={semester} subject={subject} group={group} teacherId={teacherId} />}
       </div>
     </div>
   );
