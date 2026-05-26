@@ -11,6 +11,7 @@ function StudentsManager() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
+  const [message, setMessage] = useState({ text: '', type: '' });
   const [formData, setFormData] = useState({
     matricula: '', firstName: '', lastName: '', email: '', password: '',
     dateOfBirth: '', phone: '', address: '', status: 'active'
@@ -34,9 +35,10 @@ function StudentsManager() {
     try {
       if (editingStudent) await api.put(`/admin/students/${editingStudent}`, formData);
       else await api.post('/admin/students', formData);
-      alert(editingStudent ? 'Estudiante actualizado' : 'Estudiante creado');
+      setMessage({ text: editingStudent ? 'Estudiante actualizado' : 'Estudiante creado', type: 'success' });
       setShowModal(false); resetForm(); cargarEstudiantes();
-    } catch (error) { alert(error.response?.data?.error || 'Error'); }
+      setTimeout(() => setMessage({ text: '', type: '' }), 3000);
+    } catch (error) { setMessage({ text: error.response?.data?.error || 'Error', type: 'error' }); }
   };
 
   const handleEdit = (matricula) => {
@@ -55,8 +57,8 @@ function StudentsManager() {
 
   const handleDelete = async (matricula) => {
     if (confirm('¿Desactivar este estudiante?')) {
-      try { await api.delete(`/admin/students/${matricula}`); alert('Estudiante desactivado'); cargarEstudiantes(); } 
-      catch (error) { alert('Error'); }
+      try { await api.delete(`/admin/students/${matricula}`); setMessage({ text: 'Estudiante desactivado', type: 'success' }); cargarEstudiantes(); setTimeout(() => setMessage({ text: '', type: '' }), 3000); } 
+      catch (error) { setMessage({ text: 'Error al desactivar estudiante', type: 'error' }); }
     }
   };
 
@@ -78,6 +80,11 @@ function StudentsManager() {
 
   return (
     <div className="space-y-6">
+      {message.text && (
+        <div className={`p-4 rounded ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+          {message.text}
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-800">👨‍🎓 Gestión de Estudiantes</h2>
         <button onClick={() => { resetForm(); setShowModal(true); }} className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">+ Agregar Estudiante</button>

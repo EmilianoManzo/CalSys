@@ -13,21 +13,27 @@ function AlumnoDashboard() {
   const [attendanceData, setAttendanceData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingMaterias, setLoadingMaterias] = useState(true);
+  const [error, setError] = useState('');
 
   // Cargar materias del alumno
   useEffect(() => {
     const cargarMaterias = async () => {
-      if (!user?.matricula) return;
+      if (!user?.matricula) {
+        setError('Usuario no autenticado');
+        setLoadingMaterias(false);
+        return;
+      }
       try {
         const response = await api.get('/grades/student-subjects', {
           params: { matricula: user.matricula }
         });
-        setMaterias(response.data.subjects);
-        if (response.data.subjects.length > 0) {
+        setMaterias(response.data.subjects || []);
+        if (response.data.subjects && response.data.subjects.length > 0) {
           setSelectedMateria(response.data.subjects[0].subject_code);
         }
       } catch (error) {
         console.error(error);
+        setError('Error al cargar materias: ' + (error.response?.data?.error || 'Error de conexión'));
       } finally {
         setLoadingMaterias(false);
       }
@@ -38,7 +44,13 @@ function AlumnoDashboard() {
   // Cargar datos según la pestaña (parcial o final)
   const cargarParcial = useCallback(async (parcialId, subjectCode) => {
     setLoading(true);
+    setError('');
     try {
+      if (!user?.matricula) {
+        setError('Usuario no autenticado');
+        setLoading(false);
+        return;
+      }
       const response = await api.get('/grades/student-grades', {
         params: { matricula: user.matricula, parcialId, subjectCode }
       });
@@ -55,11 +67,13 @@ function AlumnoDashboard() {
       const row = [user.matricula, user.firstName + ' ' + user.lastName];
       cols.forEach(col => {
         const val = gradesMap[col.name];
-        row.push(val !== undefined && val !== null ? parseFloat(val).toFixed(2) : '');
+        const parsedVal = val !== undefined && val !== null ? parseFloat(val) : NaN;
+        row.push(!isNaN(parsedVal) ? parsedVal.toFixed(2) : '');
       });
       setData([row]);
     } catch (error) {
       console.error(error);
+      setError('Error al cargar calificaciones del parcial: ' + (error.response?.data?.error || 'Error de conexión'));
     } finally {
       setLoading(false);
     }
@@ -67,7 +81,13 @@ function AlumnoDashboard() {
 
   const cargarFinal = useCallback(async (subjectCode) => {
     setLoading(true);
+    setError('');
     try {
+      if (!user?.matricula) {
+        setError('Usuario no autenticado');
+        setLoading(false);
+        return;
+      }
       const response = await api.get('/grades/student-final', {
         params: { matricula: user.matricula, subjectCode }
       });
@@ -81,11 +101,13 @@ function AlumnoDashboard() {
       const row = [user.matricula, user.firstName + ' ' + user.lastName];
       cols.forEach(col => {
         const val = gradesMap[col.name];
-        row.push(val !== undefined && val !== null ? parseFloat(val).toFixed(2) : '');
+        const parsedVal = val !== undefined && val !== null ? parseFloat(val) : NaN;
+        row.push(!isNaN(parsedVal) ? parsedVal.toFixed(2) : '');
       });
       setData([row]);
     } catch (error) {
       console.error(error);
+      setError('Error al cargar calificación final: ' + (error.response?.data?.error || 'Error de conexión'));
     } finally {
       setLoading(false);
     }
@@ -93,13 +115,20 @@ function AlumnoDashboard() {
 
   const cargarAsistencia = useCallback(async (subjectCode) => {
     setLoading(true);
+    setError('');
     try {
+      if (!user?.matricula) {
+        setError('Usuario no autenticado');
+        setLoading(false);
+        return;
+      }
       const response = await api.get('/attendance/student', {
         params: { matricula: user.matricula, subjectCode }
       });
       setAttendanceData(response.data);
     } catch (error) {
       console.error(error);
+      setError('Error al cargar asistencia: ' + (error.response?.data?.error || 'Error de conexión'));
     } finally {
       setLoading(false);
     }
@@ -253,6 +282,16 @@ function AlumnoDashboard() {
       <div className="max-w-7xl mx-auto p-8">
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-2xl font-bold mb-6">Mis Calificaciones</h2>
+          {error && (
+            <div className="mb-4 p-4 bg-red-100 text-red-800 rounded">
+              {error}
+            </div>
+          )}
+          {!error && !materias.length && !loadingMaterias && (
+            <div className="mb-4 p-4 bg-yellow-100 text-yellow-800 rounded">
+              No tienes materias asignadas.
+            </div>
+          )}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Materia</label>
             {loadingMaterias ? (
@@ -262,6 +301,7 @@ function AlumnoDashboard() {
                 value={selectedMateria}
                 onChange={(e) => setSelectedMateria(e.target.value)}
                 className="border rounded px-3 py-2 w-64"
+                disabled={!materias.length}
               >
                 {materias.map(m => (
                   <option key={m.subject_code} value={m.subject_code}>

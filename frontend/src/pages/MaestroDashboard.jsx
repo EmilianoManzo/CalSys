@@ -11,6 +11,7 @@ function MaestroDashboard() {
   const [subjectsList, setSubjectsList] = useState([]);
   const [groupsList, setGroupsList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (user?.id) loadTeacherSubjects();
@@ -18,7 +19,13 @@ function MaestroDashboard() {
 
   const loadTeacherSubjects = async () => {
     setLoading(true);
+    setError('');
     try {
+      if (!user?.id) {
+        setError('Usuario no autenticado');
+        setLoading(false);
+        return;
+      }
       const response = await api.get('/grades/teacher/subjects', {
         params: { teacherId: user.id, semester }
       });
@@ -35,6 +42,7 @@ function MaestroDashboard() {
       }
     } catch (error) {
       console.error(error);
+      setError('Error al cargar materias: ' + (error.response?.data?.error || 'Error de conexión'));
     } finally {
       setLoading(false);
     }
@@ -42,12 +50,17 @@ function MaestroDashboard() {
 
   const loadGroups = async (subjectCode) => {
     try {
+      if (!user?.id) {
+        setError('Usuario no autenticado');
+        return;
+      }
       const response = await api.get('/grades/subject/groups', {
         params: { teacherId: user.id, semester, subjectCode }
       });
       setGroupsList(response.data.groups || []);
     } catch (error) {
       console.error(error);
+      setError('Error al cargar grupos: ' + (error.response?.data?.error || 'Error de conexión'));
     }
   };
 
@@ -73,6 +86,16 @@ function MaestroDashboard() {
       <div className="max-w-7xl mx-auto p-8">
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-2xl font-bold mb-6">Captura de Calificaciones</h2>
+          {error && (
+            <div className="mb-4 p-4 bg-red-100 text-red-800 rounded">
+              {error}
+            </div>
+          )}
+          {!error && !subjectsList.length && (
+            <div className="mb-4 p-4 bg-yellow-100 text-yellow-800 rounded">
+              No tienes materias asignadas para este semestre.
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium mb-2">Semestre</label>

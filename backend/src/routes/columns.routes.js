@@ -1,5 +1,6 @@
 import express from 'express';
 import db from '../config/database.js';
+import { validateId, safeNumber, safeDivision, safeAverage } from '../utils/validation.js';
 
 const router = express.Router();
 
@@ -10,16 +11,18 @@ router.get('/config', async (req, res) => {
     if (!teacherId || !semester || !subject) {
       return res.status(400).json({ error: 'Parametros incompletos' });
     }
+    const validatedTeacherId = validateId(teacherId, 'Teacher ID');
+    
     const [columns] = await db.query(`
       SELECT * FROM grade_columns_config
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
         AND (group_code = ? OR group_code IS NULL)
       ORDER BY display_order, id
-    `, [teacherId, semester, subject, group]);
-    res.json({ columns });
+    `, [validatedTeacherId, semester, subject, group]);
+    res.json({ columns: columns || [] });
   } catch (error) {
     console.error('Error obteniendo configuracion:', error);
-    res.status(500).json({ error: 'Error en el servidor' });
+    res.status(500).json({ error: error.message || 'Error en el servidor' });
   }
 });
 
@@ -32,6 +35,8 @@ router.post('/config', async (req, res) => {
       connection.release();
       return res.status(400).json({ error: 'Datos incompletos' });
     }
+    const validatedTeacherId = validateId(teacherId, 'Teacher ID');
+    
     await connection.beginTransaction();
     // Eliminar columnas no especiales existentes
     await connection.query(`
@@ -39,31 +44,35 @@ router.post('/config', async (req, res) => {
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
         AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
         AND is_special = 0
-    `, [teacherId, semester, subject, group, group]);
+    `, [validatedTeacherId, semester, subject, group, group]);
     // Insertar nuevas columnas personalizadas
     let order = 0;
     for (const col of columns) {
       if (col.is_special) continue;
+      const weight = safeNumber(col.weight, 0);
+      const maxValue = safeNumber(col.maxValue, 10);
       await connection.query(`
         INSERT INTO grade_columns_config 
         (teacher_id, semester_code, subject_code, group_code, 
          column_name, column_type, max_value, weight, is_required, display_order, is_special)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-      `, [teacherId, semester, subject, group,
-          col.name, col.type || 'numeric', col.maxValue || 10,
-          col.weight || 0, col.required || false, order++]);
+      `, [validatedTeacherId, semester, subject, group,
+          col.name, col.type || 'numeric', maxValue,
+          weight, col.required || false, order++]);
     }
     // Actualizar columna especial "Promedio de Parciales"
     const specialCol = columns.find(c => c.is_special === true);
     if (specialCol) {
+      const weight = safeNumber(specialCol.weight, 0);
+      const maxValue = safeNumber(specialCol.maxValue, 10);
       await connection.query(`
         UPDATE grade_columns_config
         SET weight = ?, max_value = ?, is_required = ?
         WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
           AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
           AND is_special = 1
-      `, [specialCol.weight, specialCol.maxValue, specialCol.required ? 1 : 0,
-          teacherId, semester, subject, group, group]);
+      `, [weight, maxValue, specialCol.required ? 1 : 0,
+          validatedTeacherId, semester, subject, group, group]);
     } else {
       // Crear especial por defecto si no existe
       const [existing] = await connection.query(`
@@ -71,13 +80,13 @@ router.post('/config', async (req, res) => {
         WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
           AND (group_code = ? OR (group_code IS NULL AND ? IS NULL))
           AND is_special = 1
-      `, [teacherId, semester, subject, group, group]);
+      `, [validatedTeacherId, semester, subject, group, group]);
       if (existing.length === 0) {
         await connection.query(`
           INSERT INTO grade_columns_config
           (teacher_id, semester_code, subject_code, group_code, column_name, column_type, max_value, weight, is_required, display_order, is_special)
           VALUES (?, ?, ?, ?, 'Promedio de Parciales', 'numeric', 10, 0, 0, -1, 1)
-        `, [teacherId, semester, subject, group]);
+        `, [validatedTeacherId, semester, subject, group]);
       }
     }
     await connection.commit();
@@ -87,7 +96,7 @@ router.post('/config', async (req, res) => {
     await connection.rollback();
     connection.release();
     console.error('Error guardando configuracion:', error);
-    res.status(500).json({ error: 'Error al guardar configuracion' });
+    res.status(500).json({ error: error.message || 'Error al guardar configuracion' });
   }
 });
 
@@ -95,6 +104,7 @@ router.post('/config', async (req, res) => {
 router.get('/with-custom', async (req, res) => {
   try {
     const { teacherId, semester, subject, group } = req.query;
+    const validatedTeacherId = validateId(teacherId, 'Teacher ID');
 
     // Configuración de columnas
     const [columns] = await db.query(`
@@ -102,7 +112,7 @@ router.get('/with-custom', async (req, res) => {
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
         AND (group_code = ? OR group_code IS NULL)
       ORDER BY display_order
-    `, [teacherId, semester, subject, group]);
+    `, [validatedTeacherId, semester, subject, group]);
 
     // Datos de estudiantes y calificaciones
     const [grades] = await db.query(`
@@ -150,10 +160,10 @@ router.get('/with-custom', async (req, res) => {
       return row;
     });
 
-    res.json({ grades: result, columns });
+    res.json({ grades: result || [], columns: columns || [] });
   } catch (error) {
     console.error('Error obteniendo calificaciones:', error);
-    res.status(500).json({ error: 'Error en el servidor' });
+    res.status(500).json({ error: error.message || 'Error en el servidor' });
   }
 });
 
@@ -164,20 +174,28 @@ function calcularFinal(columns, valores, promedioParciales, ordinario) {
   // Promedio de parciales (columna especial)
   const special = columns.find(c => c.is_special === 1);
   if (special && promedioParciales !== null) {
-    total += (promedioParciales * (special.weight / 100));
-    pesoTotal += special.weight;
+    const safeProm = safeNumber(promedioParciales);
+    const weight = safeNumber(special.weight, 0);
+    if (safeProm !== null) {
+      total += (safeProm * (weight / 100));
+      pesoTotal += weight;
+    }
   }
 
   // Columnas personalizadas
   for (const col of columns) {
     if (col.column_type === 'numeric' && !col.is_special) {
       const val = valores[col.id];
-      if (val && !isNaN(val)) {
-        const v = parseFloat(val);
-        const max = parseFloat(col.max_value) || 10;
-        const w = parseFloat(col.weight) || 0;
-        total += ((v / max) * 10) * (w / 100);
-        pesoTotal += w;
+      if (val !== null && val !== undefined && val !== '') {
+        const v = safeNumber(val);
+        if (v !== null) {
+          const max = safeNumber(col.max_value, 10);
+          const w = safeNumber(col.weight, 0);
+          if (max > 0) {
+            total += safeDivision(v * 10, max, 0) * (w / 100);
+            pesoTotal += w;
+          }
+        }
       }
     }
   }
@@ -193,6 +211,7 @@ router.post('/save-custom', async (req, res) => {
   const connection = await db.getConnection();
   try {
     const { values, parciales, ordinarios, semester, subject, group, teacherId } = req.body;
+    const validatedTeacherId = validateId(teacherId, 'Teacher ID');
 
     await connection.beginTransaction();
 
@@ -201,11 +220,11 @@ router.post('/save-custom', async (req, res) => {
       SELECT * FROM grade_columns_config
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
         AND (group_code = ? OR group_code IS NULL)
-    `, [teacherId, semester, subject, group]);
+    `, [validatedTeacherId, semester, subject, group]);
 
     // Agrupar valores personalizados por estudiante
     const valoresPorEstudiante = {};
-    if (values) {
+    if (values && Array.isArray(values)) {
       for (const val of values) {
         if (!valoresPorEstudiante[val.matricula]) valoresPorEstudiante[val.matricula] = {};
         valoresPorEstudiante[val.matricula][val.columnId] = val.value;
@@ -214,6 +233,12 @@ router.post('/save-custom', async (req, res) => {
 
     // Obtener todos los estudiantes activos (para asegurar que todos tengan registro)
     const [students] = await connection.query(`SELECT matricula FROM students WHERE status = 'active'`);
+
+    if (!students || students.length === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({ error: 'No hay estudiantes activos' });
+    }
 
     for (const student of students) {
       const matricula = student.matricula;
@@ -232,7 +257,7 @@ router.post('/save-custom', async (req, res) => {
         const [result] = await connection.query(`
           INSERT INTO final_grades (student_matricula, semester_code, subject_code, group_code, teacher_id, status)
           VALUES (?, ?, ?, ?, ?, 'in_progress')
-        `, [matricula, semester, subject, group, teacherId]);
+        `, [matricula, semester, subject, group, validatedTeacherId]);
         gradeId = result.insertId;
       } else {
         gradeId = grades[0].id;
@@ -245,9 +270,9 @@ router.post('/save-custom', async (req, res) => {
 
       // Actualizar parciales si se enviaron
       if (parciales && parciales[matricula]) {
-        p1 = parciales[matricula].parcial_1 !== undefined ? parciales[matricula].parcial_1 : p1;
-        p2 = parciales[matricula].parcial_2 !== undefined ? parciales[matricula].parcial_2 : p2;
-        p3 = parciales[matricula].parcial_3 !== undefined ? parciales[matricula].parcial_3 : p3;
+        p1 = parciales[matricula].parcial_1 !== undefined ? safeNumber(parciales[matricula].parcial_1) : p1;
+        p2 = parciales[matricula].parcial_2 !== undefined ? safeNumber(parciales[matricula].parcial_2) : p2;
+        p3 = parciales[matricula].parcial_3 !== undefined ? safeNumber(parciales[matricula].parcial_3) : p3;
         await connection.query(`
           UPDATE final_grades SET parcial_1 = ?, parcial_2 = ?, parcial_3 = ?
           WHERE id = ?
@@ -256,18 +281,23 @@ router.post('/save-custom', async (req, res) => {
 
       // Actualizar ordinario si se envió
       if (ordinarios && ordinarios[matricula] !== undefined) {
-        ord = ordinarios[matricula];
+        ord = safeNumber(ordinarios[matricula]);
         await connection.query(`
           UPDATE final_grades SET ordinario = ? WHERE id = ?
         `, [ord, gradeId]);
       }
 
-      // Calcular promedio de parciales
+      // Calcular promedio de parciales de forma segura
       if (p1 !== null && p2 !== null && p3 !== null) {
-        prom = (p1 + p2 + p3) / 3;
-        await connection.query(`
-          UPDATE final_grades SET promedio_parciales = ? WHERE id = ?
-        `, [prom, gradeId]);
+        const validParciales = [p1, p2, p3].filter(p => p !== null);
+        if (validParciales.length === 3) {
+          prom = safeAverage(validParciales);
+          if (prom !== null) {
+            await connection.query(`
+              UPDATE final_grades SET promedio_parciales = ? WHERE id = ?
+            `, [prom, gradeId]);
+          }
+        }
       }
 
       // Guardar valores personalizados
@@ -296,7 +326,7 @@ router.post('/save-custom', async (req, res) => {
     await connection.rollback();
     connection.release();
     console.error('Error guardando:', error);
-    res.status(500).json({ error: 'Error al guardar: ' + error.message });
+    res.status(500).json({ error: error.message || 'Error al guardar calificaciones' });
   }
 });
 

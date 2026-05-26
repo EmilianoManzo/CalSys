@@ -1,5 +1,6 @@
 import express from 'express';
 import db from '../config/database.js';
+import { validateId, validateMatricula, safeNumber, safeDivision, safeAverage } from '../utils/validation.js';
 
 const router = express.Router();
 
@@ -7,6 +8,8 @@ router.get('/teacher/subjects', async (req, res) => {
   try {
     const { teacherId, semester } = req.query;
     if (!teacherId) return res.status(400).json({ error: 'Teacher ID requerido' });
+    const validatedTeacherId = validateId(teacherId, 'Teacher ID');
+    
     let query = `
       SELECT DISTINCT 
         fg.subject_code,
@@ -16,14 +19,14 @@ router.get('/teacher/subjects', async (req, res) => {
       FROM final_grades fg
       WHERE fg.teacher_id = ?
     `;
-    const params = [teacherId];
+    const params = [validatedTeacherId];
     if (semester) { query += ` AND fg.semester_code = ?`; params.push(semester); }
     query += ` GROUP BY fg.subject_code, fg.semester_code, fg.group_code ORDER BY fg.subject_code`;
     const [subjects] = await db.query(query, params);
-    res.json({ subjects });
+    res.json({ subjects: subjects || [] });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error en el servidor' });
+    console.error('Error en /teacher/subjects:', error);
+    res.status(500).json({ error: error.message || 'Error en el servidor' });
   }
 });
 
@@ -33,16 +36,18 @@ router.get('/subject/groups', async (req, res) => {
     if (!teacherId || !semester || !subjectCode) {
       return res.status(400).json({ error: 'Parámetros incompletos' });
     }
+    const validatedTeacherId = validateId(teacherId, 'Teacher ID');
+    
     const [groups] = await db.query(`
       SELECT DISTINCT group_code, COUNT(*) as total_students
       FROM final_grades
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ? AND group_code IS NOT NULL
       GROUP BY group_code
-    `, [teacherId, semester, subjectCode]);
-    res.json({ groups });
+    `, [validatedTeacherId, semester, subjectCode]);
+    res.json({ groups: groups || [] });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error en el servidor' });
+    console.error('Error en /subject/groups:', error);
+    res.status(500).json({ error: error.message || 'Error en el servidor' });
   }
 });
 
@@ -54,17 +59,18 @@ router.get('/student-subjects', async (req, res) => {
   try {
     const { matricula } = req.query;
     if (!matricula) return res.status(400).json({ error: 'Matrícula requerida' });
+    const validatedMatricula = validateMatricula(matricula);
 
     const [subjects] = await db.query(`
       SELECT DISTINCT subject_code, semester_code, group_code, teacher_id
       FROM final_grades
       WHERE student_matricula = ?
-    `, [matricula]);
+    `, [validatedMatricula]);
     
-    res.json({ subjects });
+    res.json({ subjects: subjects || [] });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error en el servidor' });
+    console.error('Error en /student-subjects:', error);
+    res.status(500).json({ error: error.message || 'Error en el servidor' });
   }
 });
 
@@ -72,6 +78,9 @@ router.get('/student-grades', async (req, res) => {
   try {
     const { matricula, parcialId, subjectCode } = req.query;
     if (!matricula || !parcialId || !subjectCode) return res.status(400).json({ error: 'Parámetros incompletos' });
+    
+    const validatedMatricula = validateMatricula(matricula);
+    const validatedParcialId = validateId(parcialId, 'Parcial ID');
 
     // Obtener contexto (teacher, semester, group)
     const [context] = await db.query(`
@@ -79,7 +88,7 @@ router.get('/student-grades', async (req, res) => {
       FROM final_grades
       WHERE student_matricula = ? AND subject_code = ?
       LIMIT 1
-    `, [matricula, subjectCode]);
+    `, [validatedMatricula, subjectCode]);
 
     if (context.length === 0) return res.json({ columns: [], grades: [], promedio: null });
 
@@ -91,7 +100,7 @@ router.get('/student-grades', async (req, res) => {
       FROM partial_columns_config
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ? AND partial_id = ? AND is_special = 0
     `;
-    const paramsCols = [teacher_id, semester_code, subjectCode, parcialId];
+    const paramsCols = [teacher_id, semester_code, subjectCode, validatedParcialId];
     if (group_code) { queryCols += ` AND group_code = ?`; paramsCols.push(group_code); }
     else { queryCols += ` AND group_code IS NULL`; }
     queryCols += ` ORDER BY display_order`;
@@ -104,20 +113,20 @@ router.get('/student-grades', async (req, res) => {
       FROM partial_grades
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ? AND partial_id = ? AND student_matricula = ?
     `;
-    const paramsGrades = [teacher_id, semester_code, subjectCode, parcialId, matricula];
+    const paramsGrades = [teacher_id, semester_code, subjectCode, validatedParcialId, validatedMatricula];
     if (group_code) { queryGrades += ` AND group_code = ?`; paramsGrades.push(group_code); }
     else { queryGrades += ` AND group_code IS NULL`; }
 
     const [grades] = await db.query(queryGrades, paramsGrades);
 
-    // Obtener promedio
+    // Obtener promedio de forma segura
     const promedioObj = grades.find(g => g.columnName === '__promedio');
-    const promedio = promedioObj ? parseFloat(promedioObj.value) : null;
+    const promedio = promedioObj ? safeNumber(promedioObj.value) : null;
 
-    res.json({ columns, grades, promedio });
+    res.json({ columns: columns || [], grades: grades || [], promedio });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message, stack: error.stack });
+    console.error('Error en /student-grades:', error);
+    res.status(500).json({ error: error.message || 'Error en el servidor' });
   }
 });
 
@@ -127,13 +136,15 @@ router.get('/student-final', async (req, res) => {
     if (!matricula || !subjectCode) return res.status(400).json({ error: 'Parámetros incompletos' });
     const parcialId = 4;
 
+    const validatedMatricula = validateMatricula(matricula);
+
     // Obtener contexto
     const [context] = await db.query(`
       SELECT teacher_id, semester_code, group_code
       FROM final_grades
       WHERE student_matricula = ? AND subject_code = ?
       LIMIT 1
-    `, [matricula, subjectCode]);
+    `, [validatedMatricula, subjectCode]);
 
     if (context.length === 0) return res.json({ columns: [], grades: [], promedio: null });
 
@@ -158,16 +169,16 @@ router.get('/student-final', async (req, res) => {
       FROM partial_grades
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ? AND partial_id = ? AND student_matricula = ?
     `;
-    const paramsGrades = [teacher_id, semester_code, subjectCode, parcialId, matricula];
+    const paramsGrades = [teacher_id, semester_code, subjectCode, parcialId, validatedMatricula];
     if (group_code) { queryGrades += ` AND group_code = ?`; paramsGrades.push(group_code); }
     else { queryGrades += ` AND group_code IS NULL`; }
     
     const [gradesData] = await db.query(queryGrades, paramsGrades);
-    let finalGrades = [...gradesData];
+    let finalGrades = [...(gradesData || [])];
 
     // Necesitamos calcular el Promedio de Parciales si la columna especial existe
     const specialCol = columns.find(c => c.isSpecial === 1);
-    const specialWeight = specialCol ? (parseFloat(specialCol.weight) || 0) : 0;
+    const specialWeight = specialCol ? safeNumber(specialCol.weight, 0) : 0;
     
     let promedioEspecial = null;
     if (specialCol) {
@@ -177,47 +188,52 @@ router.get('/student-final', async (req, res) => {
         WHERE teacher_id = ? AND semester_code = ? AND subject_code = ? 
           AND partial_id IN (1,2,3) AND column_name = '__promedio' AND student_matricula = ?
       `;
-      const promParams = [teacher_id, semester_code, subjectCode, matricula];
+      const promParams = [teacher_id, semester_code, subjectCode, validatedMatricula];
       if (group_code) { promQuery += ` AND group_code = ?`; promParams.push(group_code); }
       else { promQuery += ` AND group_code IS NULL`; }
       
       const [promRows] = await db.query(promQuery, promParams);
-      if (promRows.length > 0) {
-        const sum = promRows.reduce((a, b) => a + parseFloat(b.value), 0);
-        promedioEspecial = sum / promRows.length;
-        promedioEspecial = parseFloat(promedioEspecial.toFixed(2));
-        
-        finalGrades.push({
-          columnName: specialCol.name,
-          value: promedioEspecial
-        });
+      if (promRows && promRows.length > 0) {
+        const validValues = promRows.map(r => safeNumber(r.value)).filter(v => v !== null);
+        if (validValues.length > 0) {
+          promedioEspecial = safeAverage(validValues);
+          if (promedioEspecial !== null) {
+            promedioEspecial = parseFloat(promedioEspecial.toFixed(2));
+            finalGrades.push({
+              columnName: specialCol.name,
+              value: promedioEspecial
+            });
+          }
+        }
       }
     }
 
-    // Calcular Promedio Final Global
+    // Calcular Promedio Final Global de forma segura
     let total = 0, pesoTotal = 0;
     for (const col of columns) {
       if (col.isSpecial === 1) continue;
       const g = finalGrades.find(g => g.columnName === col.name);
-      const val = g ? parseFloat(g.value) : null;
-      if (val !== null && !isNaN(val)) {
-        const w = parseFloat(col.weight) || 0;
-        const max = parseFloat(col.maxValue) || 10;
-        total += (val / max) * 10 * (w / 100);
-        pesoTotal += w;
+      const val = g ? safeNumber(g.value) : null;
+      if (val !== null) {
+        const w = safeNumber(col.weight, 0);
+        const max = safeNumber(col.maxValue, 10);
+        if (max > 0) {
+          total += safeDivision(val * 10, max, 0) * (w / 100);
+          pesoTotal += w;
+        }
       }
     }
     if (promedioEspecial !== null && specialWeight > 0) {
-      total += (promedioEspecial / 10) * 10 * (specialWeight / 100);
+      total += safeDivision(promedioEspecial * 10, 10, 0) * (specialWeight / 100);
       pesoTotal += specialWeight;
     }
     
     const finalGlobal = pesoTotal > 0 ? parseFloat(total.toFixed(2)) : null;
 
-    res.json({ columns, grades: finalGrades, promedio: finalGlobal });
+    res.json({ columns: columns || [], grades: finalGrades, promedio: finalGlobal });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message, stack: error.stack });
+    console.error('Error en /student-final:', error);
+    res.status(500).json({ error: error.message || 'Error en el servidor' });
   }
 });
 
