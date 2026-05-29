@@ -4,6 +4,14 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
   const [localColumns, setLocalColumns] = useState([]);
 
   useEffect(() => {
+    const specials = (columns || []).filter(c => c.is_special).map(col => ({
+      name: col.column_name || col.name || '',
+      type: 'numeric',
+      maxValue: col.max_value || col.maxValue || 10,
+      weight: col.weight || 0,
+      required: col.is_required || col.required || false,
+      is_special: true
+    }));
     let normals = (columns || []).filter(c => !c.is_special).map(col => ({
       name: col.column_name || col.name || '',
       type: col.column_type || col.type || 'numeric',
@@ -13,19 +21,8 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
       is_special: false
     }));
     if (showSpecialColumn) {
-      const existingSpecial = (columns || []).find(c => c.is_special === true);
-      if (existingSpecial) {
-        setLocalColumns([
-          {
-            name: existingSpecial.column_name || 'Promedio de Parciales',
-            type: 'numeric',
-            maxValue: existingSpecial.max_value || 10,
-            weight: existingSpecial.weight || 0,
-            required: existingSpecial.is_required || false,
-            is_special: true
-          },
-          ...normals
-        ]);
+      if (specials.length > 0) {
+        setLocalColumns([...specials, ...normals]);
       } else {
         setLocalColumns([
           { name: 'Promedio de Parciales', type: 'numeric', maxValue: 10, weight: 0, required: false, is_special: true },
@@ -58,7 +55,7 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
 
   const removeColumn = (idx) => {
     if (localColumns[idx].is_special) {
-      alert('No se puede eliminar la columna de promedio de parciales');
+      alert('No se puede eliminar una columna especial');
       return;
     }
     if (localColumns.filter(c => !c.is_special).length === 1) {
@@ -98,81 +95,218 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
     .reduce((s, c) => s + (parseFloat(c.weight) || 0), 0);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-hidden flex flex-col">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white">
-          <h2 className="text-3xl font-bold mb-2">Configurar Columnas de Evaluación</h2>
-          <p className="text-blue-100">{showSpecialColumn ? 'La primera fila (Promedio de Parciales) es fija y su peso es configurable.' : 'Define las actividades que componen este parcial.'}</p>
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '1rem',
+      fontFamily: 'DM Sans, sans-serif'
+    }}>
+      <div style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '16px',
+        maxWidth: '1000px',
+        width: '100%',
+        maxHeight: '95vh',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
+      }}>
+        <div style={{
+          background: '#880000',
+          padding: '1.5rem',
+          color: '#ffffff'
+        }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '8px' }}>Configurar Columnas de Evaluación</h2>
+          <p style={{ color: '#fca5a5' }}>{showSpecialColumn ? 'Las filas especiales son de solo lectura y su peso es configurable.' : 'Define las actividades que componen este parcial.'}</p>
         </div>
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="mb-6 bg-gray-50 border-2 border-gray-200 rounded-lg p-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-semibold text-gray-700">Ponderación Total:</span>
-              <span className={`text-2xl font-bold ${totalWeight > 100 ? 'text-red-600' : totalWeight === 100 ? 'text-green-600' : 'text-yellow-600'}`}>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
+          <div style={{
+            marginBottom: '1.5rem',
+            backgroundColor: '#f9fafb',
+            border: '0.5px solid #e5e7eb',
+            borderRadius: '12px',
+            padding: '1rem'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 500, color: '#4b5563' }}>Ponderación Total:</span>
+              <span style={{
+                fontSize: '24px',
+                fontWeight: 700,
+                color: totalWeight > 100 ? '#dc2626' : totalWeight === 100 ? '#10b981' : '#f59e0b'
+              }}>
                 {totalWeight.toFixed(1)}%
               </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-              <div className={`h-full transition-all duration-300 ${totalWeight > 100 ? 'bg-red-500' : totalWeight === 100 ? 'bg-green-500' : 'bg-yellow-500'}`} style={{ width: `${Math.min(totalWeight, 100)}%` }} />
+            <div style={{ width: '100%', backgroundColor: '#e5e7eb', borderRadius: '9999px', height: '8px', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                transition: 'all 0.3s',
+                backgroundColor: totalWeight > 100 ? '#dc2626' : totalWeight === 100 ? '#10b981' : '#f59e0b',
+                width: `${Math.min(totalWeight, 100)}%`
+              }} />
             </div>
           </div>
+
           {localColumns.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-              <p className="text-gray-500 text-lg mb-4">No hay columnas configuradas</p>
-              <p className="text-gray-400 text-sm">Haz clic en "Agregar Columna" para comenzar</p>
+            <div style={{ textAlign: 'center', padding: '2rem', backgroundColor: '#f9fafb', borderRadius: '12px', border: '2px dashed #d1d5db' }}>
+              <p style={{ color: '#6b7280', marginBottom: '8px' }}>No hay columnas configuradas</p>
+              <p style={{ color: '#9ca3af', fontSize: '13px' }}>Haz clic en "Agregar Columna" para comenzar</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {localColumns.map((col, idx) => (
-                <div key={idx} className={`bg-white border-2 rounded-lg p-4 shadow-sm ${col.is_special ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`font-bold rounded-full w-8 h-8 flex items-center justify-center text-sm ${col.is_special ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'}`}>
+                <div key={idx} style={{
+                  backgroundColor: col.is_special ? '#fef3c7' : '#ffffff',
+                  border: `1px solid ${col.is_special ? '#fcd34b' : '#e5e7eb'}`,
+                  borderRadius: '12px',
+                  padding: '1rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '9999px',
+                      backgroundColor: col.is_special ? '#d97706' : '#880000',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 600,
+                      fontSize: '14px'
+                    }}>
                       {idx + 1}
                     </div>
-                    <h3 className="font-semibold text-gray-700">
+                    <h3 style={{ fontWeight: 600, color: '#111111' }}>
                       {col.name || `Columna ${idx + 1}`}
-                      {col.is_special && <span className="ml-2 text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded">Fija (Promedio Parciales)</span>}
+                      {col.is_special && <span style={{ marginLeft: '8px', fontSize: '11px', backgroundColor: '#fef3c7', color: '#d97706', padding: '2px 6px', borderRadius: '9999px' }}>Especial</span>}
+                      {col.type === 'text' && <span style={{ marginLeft: '8px', fontSize: '11px', backgroundColor: '#e5e7eb', color: '#4b5563', padding: '2px 6px', borderRadius: '9999px' }}>Texto</span>}
+                      {col.required && <span style={{ marginLeft: '8px', fontSize: '11px', backgroundColor: '#fee2e2', color: '#dc2626', padding: '2px 6px', borderRadius: '9999px' }}>Obligatoria</span>}
                     </h3>
-                    {col.type === 'text' && <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">Solo texto</span>}
-                    {col.required && <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">Obligatoria</span>}
                   </div>
-                  <div className="grid grid-cols-12 gap-3">
-                    <div className="col-span-12 md:col-span-4">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">NOMBRE *</label>
-                      <input type="text" value={col.name} onChange={e => updateColumn(idx, 'name', e.target.value)} disabled={col.is_special} className={`w-full border-2 rounded-lg px-3 py-2 focus:border-blue-500 outline-none ${col.is_special ? 'bg-gray-100' : ''}`} placeholder={col.is_special ? 'Promedio de Parciales (fijo)' : 'Ej: Tarea 1, Examen Final'} />
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '8px' }}>
+                    <div style={{ gridColumn: 'span 4' }}>
+                      <label style={{ fontSize: '10px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Nombre</label>
+                      <input
+                        type="text"
+                        value={col.name}
+                        onChange={e => updateColumn(idx, 'name', e.target.value)}
+                        disabled={col.is_special}
+                        style={{
+                          width: '100%',
+                          border: `1px solid ${col.is_special ? '#fcd34b' : '#e5e7eb'}`,
+                          borderRadius: '8px',
+                          padding: '8px 12px',
+                          fontSize: '13px',
+                          backgroundColor: col.is_special ? '#fef3c7' : '#ffffff'
+                        }}
+                        placeholder={col.is_special ? 'Nombre fijo' : 'Ej: Tarea 1'}
+                      />
                     </div>
-                    <div className="col-span-6 md:col-span-2">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">TIPO</label>
-                      <select value={col.type} onChange={e => updateColumn(idx, 'type', e.target.value)} disabled={col.is_special} className="w-full border-2 rounded-lg px-3 py-2 focus:border-blue-500 outline-none">
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label style={{ fontSize: '10px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Tipo</label>
+                      <select
+                        value={col.type}
+                        onChange={e => updateColumn(idx, 'type', e.target.value)}
+                        disabled={col.is_special}
+                        style={{
+                          width: '100%',
+                          border: `1px solid ${col.is_special ? '#fcd34b' : '#e5e7eb'}`,
+                          borderRadius: '8px',
+                          padding: '8px 12px',
+                          fontSize: '13px',
+                          backgroundColor: col.is_special ? '#fef3c7' : '#ffffff'
+                        }}
+                      >
                         <option value="numeric">Numérico</option>
                         <option value="text">Texto</option>
                       </select>
                     </div>
                     {col.type === 'numeric' ? (
                       <>
-                        <div className="col-span-6 md:col-span-2">
-                          <label className="block text-xs font-semibold text-gray-600 mb-1">VALOR MAX</label>
-                          <input type="number" step="0.01" min="0" value={col.maxValue} onChange={e => updateColumn(idx, 'maxValue', e.target.value)} disabled={col.is_special} className="w-full border-2 rounded-lg px-3 py-2" />
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <label style={{ fontSize: '10px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Valor Max</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={col.maxValue}
+                            onChange={e => updateColumn(idx, 'maxValue', e.target.value)}
+                            disabled={col.is_special}
+                            style={{
+                              width: '100%',
+                              border: `1px solid ${col.is_special ? '#fcd34b' : '#e5e7eb'}`,
+                              borderRadius: '8px',
+                              padding: '8px 12px',
+                              fontSize: '13px',
+                              backgroundColor: col.is_special ? '#fef3c7' : '#ffffff'
+                            }}
+                          />
                         </div>
-                        <div className="col-span-6 md:col-span-2">
-                          <label className="block text-xs font-semibold text-gray-600 mb-1">PESO (%)</label>
-                          <input type="number" step="0.1" min="0" max="100" value={col.weight} onChange={e => updateColumn(idx, 'weight', e.target.value)} className="w-full border-2 rounded-lg px-3 py-2" />
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <label style={{ fontSize: '10px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Peso (%)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={col.weight}
+                            onChange={e => updateColumn(idx, 'weight', e.target.value)}
+                            style={{
+                              width: '100%',
+                              border: `1px solid ${col.is_special ? '#fcd34b' : '#e5e7eb'}`,
+                              borderRadius: '8px',
+                              padding: '8px 12px',
+                              fontSize: '13px'
+                            }}
+                          />
                         </div>
                       </>
                     ) : (
-                      <div className="col-span-12 md:col-span-4">
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">SIN PONDERACIÓN</label>
-                        <div className="bg-gray-50 border-2 border-gray-200 rounded-lg px-3 py-2 text-gray-500 text-sm italic">Campo de texto (no cuenta para calificación)</div>
+                      <div style={{ gridColumn: 'span 4' }}>
+                        <label style={{ fontSize: '10px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Sin Ponderación</label>
+                        <div style={{ backgroundColor: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', color: '#6b7280', fontStyle: 'italic' }}>
+                          Campo de texto
+                        </div>
                       </div>
                     )}
-                    <div className="col-span-6 md:col-span-1 flex items-end">
-                      <label className="flex items-center space-x-2 cursor-pointer">
-                        <input type="checkbox" checked={col.required} onChange={e => updateColumn(idx, 'required', e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
-                        <span className="text-xs font-medium text-gray-700">Req.</span>
+                    <div style={{ gridColumn: 'span 1', display: 'flex', alignItems: 'flex-end' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={col.required}
+                          onChange={e => updateColumn(idx, 'required', e.target.checked)}
+                          style={{ width: '16px', height: '16px', accentColor: '#880000' }}
+                        />
+                        <span style={{ fontSize: '11px', fontWeight: 500, color: '#4b5563' }}>Req.</span>
                       </label>
                     </div>
-                    <div className="col-span-6 md:col-span-1 flex items-end">
-                      <button onClick={() => removeColumn(idx)} disabled={col.is_special} className={`w-full px-3 py-2 rounded-lg font-semibold transition-colors ${col.is_special ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'}`}>
+                    <div style={{ gridColumn: 'span 1', display: 'flex', alignItems: 'flex-end' }}>
+                      <button
+                        onClick={() => removeColumn(idx)}
+                        disabled={col.is_special}
+                        style={{
+                          width: '100%',
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          fontWeight: 600,
+                          border: 'none',
+                          cursor: col.is_special ? 'not-allowed' : 'pointer',
+                          backgroundColor: col.is_special ? '#e5e7eb' : '#dc2626',
+                          color: col.is_special ? '#9ca3af' : '#ffffff',
+                          fontSize: '12px'
+                        }}
+                      >
                         🗑️
                       </button>
                     </div>
@@ -181,33 +315,89 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
               ))}
             </div>
           )}
-          <button onClick={addColumn} className="mt-4 w-full border-3 border-dashed border-blue-400 bg-blue-50 text-blue-700 py-4 rounded-lg font-bold text-lg hover:bg-blue-100 transition-all">
+
+          <button
+            onClick={addColumn}
+            style={{
+              marginTop: '1rem',
+              width: '100%',
+              border: '2px dashed #880000',
+              backgroundColor: '#fef2f2',
+              color: '#880000',
+              padding: '12px',
+              borderRadius: '12px',
+              fontWeight: 600,
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
             + Agregar Nueva Columna
           </button>
-          <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 rounded-lg p-4">
-            <p className="font-bold text-blue-900 mb-2">💡 Consejos:</p>
-            <ul className="space-y-1 text-sm text-blue-800">
-              {showSpecialColumn && <li>• <strong>Promedio de Parciales (fijo):</strong> Se calcula automáticamente como el promedio de los tres parciales. Puedes asignarle un peso.</li>}
+
+          <div style={{
+            marginTop: '1.5rem',
+            backgroundColor: '#fef2f2',
+            borderLeft: '4px solid #880000',
+            borderRadius: '8px',
+            padding: '1rem'
+          }}>
+            <p style={{ fontWeight: 700, color: '#880000', marginBottom: '8px' }}>💡 Consejos:</p>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '13px', color: '#7f1d1d' }}>
+              {showSpecialColumn && <li>• <strong>Columnas especiales:</strong> Se calculan automáticamente y solo puedes ajustar su peso.</li>}
               <li>• <strong>Numérico:</strong> Para calificaciones que suman a la nota final.</li>
               <li>• <strong>Texto:</strong> Solo comentarios (no afecta la nota).</li>
               <li>• <strong>Peso:</strong> La suma de los pesos de todas las columnas numéricas debe ser 100%.</li>
             </ul>
           </div>
         </div>
-        <div className="border-t-2 bg-gray-50 p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="text-center sm:text-left">
-              <div className="text-sm text-gray-600">{localColumns.length} columnas</div>
-              <div className={`text-lg font-bold ${totalWeight > 100 ? 'text-red-600' : totalWeight === 100 ? 'text-green-600' : 'text-yellow-600'}`}>
-                Total: {totalWeight.toFixed(1)}% / 100%
-              </div>
+
+        <div style={{
+          borderTop: '1px solid #e5e7eb',
+          backgroundColor: '#f9fafb',
+          padding: '1rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem'
+        }}>
+          <div>
+            <div style={{ fontSize: '13px', color: '#6b7280' }}>{localColumns.length} columnas</div>
+            <div style={{ fontSize: '18px', fontWeight: 700, color: totalWeight > 100 ? '#dc2626' : totalWeight === 100 ? '#10b981' : '#f59e0b' }}>
+              Total: {totalWeight.toFixed(1)}% / 100%
             </div>
-            <div className="flex gap-3">
-              <button onClick={onCancel} className="px-6 py-3 border-2 border-gray-300 rounded-lg hover:bg-gray-100 font-semibold">Cancelar</button>
-              <button onClick={handleSave} className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 font-bold shadow-lg transition-all">
-                Guardar Configuración
-              </button>
-            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={onCancel}
+              style={{
+                padding: '8px 20px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                backgroundColor: '#ffffff',
+                color: '#4b5563',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              style={{
+                padding: '8px 24px',
+                border: 'none',
+                borderRadius: '8px',
+                backgroundColor: '#880000',
+                color: '#ffffff',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+              }}
+            >
+              Guardar Configuración
+            </button>
           </div>
         </div>
       </div>

@@ -3,6 +3,10 @@ import db from '../config/database.js';
 import { validateId, validateMatricula, safeNumber, safeDivision, safeAverage } from '../utils/validation.js';
 
 const router = express.Router();
+const EXAMEN_FINAL_PARTIAL_ID = 4;
+const CALIFICACION_FINAL_PARTIAL_ID = 5;
+const SPECIAL_PARTIALS_AVG_NAME = 'Promedio de Parciales';
+const SPECIAL_EXAMEN_FINAL_NAME = 'Calificación Examen Final';
 
 router.get('/teacher/subjects', async (req, res) => {
   try {
@@ -134,7 +138,7 @@ router.get('/student-final', async (req, res) => {
   try {
     const { matricula, subjectCode } = req.query;
     if (!matricula || !subjectCode) return res.status(400).json({ error: 'Parámetros incompletos' });
-    const parcialId = 4;
+    const parcialId = CALIFICACION_FINAL_PARTIAL_ID;
 
     const validatedMatricula = validateMatricula(matricula);
 
@@ -177,11 +181,13 @@ router.get('/student-final', async (req, res) => {
     let finalGrades = [...(gradesData || [])];
 
     // Necesitamos calcular el Promedio de Parciales si la columna especial existe
-    const specialCol = columns.find(c => c.isSpecial === 1);
-    const specialWeight = specialCol ? safeNumber(specialCol.weight, 0) : 0;
+    const specialParciales = columns.find(c => c.isSpecial === 1 && c.name === SPECIAL_PARTIALS_AVG_NAME);
+    const specialExamenFinal = columns.find(c => c.isSpecial === 1 && c.name === SPECIAL_EXAMEN_FINAL_NAME);
+    const specialParcialesWeight = specialParciales ? safeNumber(specialParciales.weight, 0) : 0;
+    const specialExamenFinalWeight = specialExamenFinal ? safeNumber(specialExamenFinal.weight, 0) : 0;
     
     let promedioEspecial = null;
-    if (specialCol) {
+    if (specialParciales) {
       let promQuery = `
         SELECT partial_id, value
         FROM partial_grades
@@ -200,11 +206,34 @@ router.get('/student-final', async (req, res) => {
           if (promedioEspecial !== null) {
             promedioEspecial = parseFloat(promedioEspecial.toFixed(2));
             finalGrades.push({
-              columnName: specialCol.name,
+              columnName: specialParciales.name,
               value: promedioEspecial
             });
           }
         }
+      }
+    }
+
+    let examenFinalGrade = null;
+    if (specialExamenFinal) {
+      let examQuery = `
+        SELECT value
+        FROM partial_grades
+        WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
+          AND partial_id = ? AND column_name = '__promedio' AND student_matricula = ?
+      `;
+      const examParams = [teacher_id, semester_code, subjectCode, EXAMEN_FINAL_PARTIAL_ID, validatedMatricula];
+      if (group_code) { examQuery += ` AND group_code = ?`; examParams.push(group_code); }
+      else { examQuery += ` AND group_code IS NULL`; }
+
+      const [examRows] = await db.query(examQuery, examParams);
+      const rawExam = examRows && examRows.length > 0 ? safeNumber(examRows[0].value) : null;
+      if (rawExam !== null) {
+        examenFinalGrade = parseFloat(rawExam.toFixed(2));
+        finalGrades.push({
+          columnName: specialExamenFinal.name,
+          value: examenFinalGrade
+        });
       }
     }
 
@@ -223,9 +252,13 @@ router.get('/student-final', async (req, res) => {
         }
       }
     }
-    if (promedioEspecial !== null && specialWeight > 0) {
-      total += safeDivision(promedioEspecial * 10, 10, 0) * (specialWeight / 100);
-      pesoTotal += specialWeight;
+    if (promedioEspecial !== null && specialParcialesWeight > 0) {
+      total += safeDivision(promedioEspecial * 10, 10, 0) * (specialParcialesWeight / 100);
+      pesoTotal += specialParcialesWeight;
+    }
+    if (examenFinalGrade !== null && specialExamenFinalWeight > 0) {
+      total += safeDivision(examenFinalGrade * 10, 10, 0) * (specialExamenFinalWeight / 100);
+      pesoTotal += specialExamenFinalWeight;
     }
     
     const finalGlobal = pesoTotal > 0 ? parseFloat(total.toFixed(2)) : null;

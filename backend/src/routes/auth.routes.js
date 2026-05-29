@@ -97,7 +97,6 @@ router.post('/login', async (req, res) => {
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const user = req.user;
-    // Podrías buscar datos frescos en BD si lo deseas
     res.json({ user });
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener usuario' });

@@ -84,50 +84,65 @@ function AttendanceTable({ semester, subject, group, teacherId }) {
     }
   };
 
-  if (loading) return <div className="text-center py-8">Cargando asistencia...</div>;
+  const styles = {
+    container: { fontFamily: 'DM Sans, sans-serif' },
+    header: { marginBottom: '1.5rem', backgroundColor: '#f9fafb', padding: '1rem', borderRadius: '12px', border: '0.5px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' },
+    form: { display: 'flex', gap: '0.5rem', alignItems: 'center' },
+    label: { fontSize: '13px', fontWeight: 500, color: '#374151' },
+    input: { border: '0.5px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontFamily: 'DM Sans, sans-serif' },
+    addBtn: { background: '#10b981', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' },
+    saveBtn: { background: '#880000', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 24px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' },
+    table: { width: '100%', backgroundColor: '#ffffff', border: '0.5px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', fontSize: '13px' },
+    th: { borderBottom: '0.5px solid #e5e7eb', padding: '12px 8px', textAlign: 'left', backgroundColor: '#f9fafb', fontWeight: 600, color: '#374151' },
+    td: { borderBottom: '0.5px solid #e5e7eb', padding: '10px 8px' },
+    stickyLeft: { position: 'sticky', left: 0, backgroundColor: '#ffffff', zIndex: 10 },
+    emptyState: { textAlign: 'center', padding: '2rem', color: '#9ca3af' }
+  };
+
+  if (loading) return <div style={{ textAlign: 'center', padding: '2rem', fontFamily: 'DM Sans, sans-serif', color: '#6b7280' }}>Cargando asistencia...</div>;
 
   return (
-    <div>
-      <div className="mb-6 bg-gray-50 p-4 rounded border flex justify-between items-center">
-        <form onSubmit={handleAddDate} className="flex gap-2 items-center">
-          <label className="text-sm font-medium">Nueva fecha de clase:</label>
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <form onSubmit={handleAddDate} style={styles.form}>
+          <label style={styles.label}>Nueva fecha de clase:</label>
           <input 
             type="date" 
             value={newDate} 
             onChange={e => setNewDate(e.target.value)}
-            className="border rounded px-2 py-1"
+            style={styles.input}
           />
-          <button type="submit" className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
+          <button type="submit" style={styles.addBtn}>
             Añadir
           </button>
         </form>
         <button 
           onClick={handleSave} 
           disabled={saving || dates.length === 0}
-          className="bg-blue-600 text-white px-6 py-2 rounded font-medium hover:bg-blue-700 disabled:bg-gray-400"
+          style={{ ...styles.saveBtn, opacity: (saving || dates.length === 0) ? 0.5 : 1 }}
         >
           {saving ? 'Guardando...' : 'Guardar Asistencias'}
         </button>
       </div>
 
       {dates.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
+        <div style={styles.emptyState}>
           No hay fechas registradas. Añade una fecha para comenzar a tomar asistencia.
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
-            <thead className="bg-gray-100">
+        <div style={{ overflowX: 'auto' }}>
+          <table style={styles.table}>
+            <thead>
               <tr>
-                <th className="border px-4 py-2 text-left sticky left-0 bg-gray-100 z-10 w-32">Matrícula</th>
-                <th className="border px-4 py-2 text-left sticky left-32 bg-gray-100 z-10 w-64">Alumno</th>
+                <th style={{ ...styles.th, ...styles.stickyLeft, left: 0, minWidth: '100px' }}>Matrícula</th>
+                <th style={{ ...styles.th, ...styles.stickyLeft, left: '100px', minWidth: '200px' }}>Alumno</th>
                 {dates.map(d => (
-                  <th key={d.id} className="border px-2 py-2 text-center min-w-[100px]">
-                    <div className="flex flex-col items-center gap-1">
+                  <th key={d.id} style={{ ...styles.th, textAlign: 'center', minWidth: '100px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                       <span>{d.class_date}</span>
                       <button 
                         onClick={() => handleDeleteDate(d.id)}
-                        className="text-red-500 hover:text-red-700 text-xs"
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '11px' }}
                         title="Eliminar fecha"
                       >
                         ✕
@@ -135,29 +150,25 @@ function AttendanceTable({ semester, subject, group, teacherId }) {
                     </div>
                   </th>
                 ))}
-                <th className="border px-4 py-2 text-center bg-blue-50 font-bold">% Final</th>
+                <th style={{ ...styles.th, textAlign: 'center', backgroundColor: '#fef3c7', fontWeight: 700 }}>% Final</th>
               </tr>
             </thead>
             <tbody>
               {records.map((row, idx) => (
-                <tr key={row.matricula} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className="border px-4 py-2 sticky left-0 z-10 font-medium" style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9fafb' }}>
-                    {row.matricula}
-                  </td>
-                  <td className="border px-4 py-2 sticky left-32 z-10" style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9fafb' }}>
-                    {row.nombre}
-                  </td>
+                <tr key={row.matricula} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
+                  <td style={{ ...styles.td, ...styles.stickyLeft, left: 0, fontWeight: 500 }}>{row.matricula}</td>
+                  <td style={{ ...styles.td, ...styles.stickyLeft, left: '100px' }}>{row.nombre}</td>
                   {dates.map(d => (
-                    <td key={d.id} className="border px-2 py-2 text-center">
+                    <td key={d.id} style={{ ...styles.td, textAlign: 'center' }}>
                       <input 
                         type="checkbox" 
                         checked={row[`date_${d.id}`] || false}
                         onChange={() => handleToggle(row.matricula, d.id)}
-                        className="w-5 h-5 cursor-pointer accent-blue-600"
+                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#880000' }}
                       />
                     </td>
                   ))}
-                  <td className="border px-4 py-2 text-center font-bold bg-blue-50">
+                  <td style={{ ...styles.td, textAlign: 'center', fontWeight: 700, backgroundColor: '#fef3c7' }}>
                     {row.percentage}%
                   </td>
                 </tr>

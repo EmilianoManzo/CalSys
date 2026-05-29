@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../config/database.js';
 import { validateId, validateMatricula, validateEmail, validateNonEmptyString, safeNumber, safeAverage } from '../utils/validation.js';
+import { deleteAsignacion, deleteAllSubjectData, deleteStudentRecords, deleteTeacherRecords } from '../utils/deleteAssignment.js';
 
 const router = express.Router();
 
@@ -149,23 +150,24 @@ router.put('/materias/:id', async (req, res) => {
 });
 
 router.delete('/materias/:id', async (req, res) => {
+  const connection = await db.getConnection();
   try {
-    const { id } = req.params;
-    const validatedId = validateId(id, 'ID de materia');
-    
-    const [materia] = await db.query('SELECT subject_code FROM materias WHERE id = ?', [validatedId]);
+    const validatedId = validateId(req.params.id, 'ID de materia');
+    const [materia] = await connection.query('SELECT subject_code FROM materias WHERE id = ?', [validatedId]);
     if (!materia || materia.length === 0) {
+      connection.release();
       return res.status(404).json({ error: 'Materia no encontrada' });
     }
-    const [asignaciones] = await db.query(`
-      SELECT COUNT(*) as total FROM final_grades WHERE subject_code = ?
-    `, [materia[0].subject_code]);
-    if (asignaciones[0].total > 0) {
-      return res.status(400).json({ error: 'No se puede eliminar la materia porque tiene calificaciones asignadas' });
-    }
-    await db.query('DELETE FROM materias WHERE id = ?', [validatedId]);
-    res.json({ success: true, message: 'Materia eliminada exitosamente' });
+    const subjectCode = materia[0].subject_code;
+    await connection.beginTransaction();
+    await deleteAllSubjectData(connection, subjectCode);
+    await connection.query('DELETE FROM materias WHERE id = ?', [validatedId]);
+    await connection.commit();
+    connection.release();
+    res.json({ success: true, message: 'Materia y todas sus asignaciones eliminadas' });
   } catch (error) {
+    await connection.rollback();
+    connection.release();
     console.error('Error eliminando materia:', error);
     res.status(500).json({ error: error.message || 'Error al eliminar materia' });
   }
@@ -191,9 +193,9 @@ router.get('/profesores', async (req, res) => {
 router.get('/grupos', async (req, res) => {
   try {
     const [grupos] = await db.query(`
-      SELECT DISTINCT group_code 
-      FROM final_grades 
-      WHERE group_code IS NOT NULL
+      SELECT group_code
+      FROM student_groups
+      WHERE is_active = 1
       ORDER BY group_code
     `);
     res.json({ grupos: grupos ? grupos.map(g => g.group_code) : [] });
@@ -202,6 +204,115 @@ router.get('/grupos', async (req, res) => {
     res.status(500).json({ error: error.message || 'Error en el servidor' });
   }
 });
+
+// ============================================
+// ENDPOINTS PARA GRUPOS DE ESTUDIANTES
+// ============================================
+router.get('/student-groups', async (req, res) => {
+  try {
+    const [groups] = await db.query(`
+      SELECT sg.id, sg.group_code, sg.name, sg.description, sg.is_active, sg.created_at,
+        COUNT(CASE WHEN s.status = 'active' THEN s.matricula END) AS member_count
+      FROM student_groups sg
+      LEFT JOIN students s ON s.group_id = sg.id
+      GROUP BY sg.id
+      ORDER BY sg.group_code
+    `);
+    res.json({ groups: groups || [] });
+  } catch (error) {
+    console.error('Error obteniendo grupos de estudiantes:', error);
+    res.status(500).json({ error: error.message || 'Error en el servidor' });
+  }
+});
+
+router.post('/student-groups', async (req, res) => {
+  try {
+    const { groupCode, name, description } = req.body;
+    const validatedCode = validateNonEmptyString(groupCode, 'Código de grupo').toUpperCase();
+    const validatedName = validateNonEmptyString(name, 'Nombre');
+    const [existing] = await db.query('SELECT id FROM student_groups WHERE group_code = ?', [validatedCode]);
+    if (existing && existing.length > 0) {
+      return res.status(400).json({ error: 'El código de grupo ya existe' });
+    }
+    const [result] = await db.query(
+      `INSERT INTO student_groups (group_code, name, description) VALUES (?, ?, ?)`,
+      [validatedCode, validatedName, description || null]
+    );
+    res.json({ success: true, id: result.insertId, message: 'Grupo creado' });
+  } catch (error) {
+    console.error('Error creando grupo:', error);
+    res.status(500).json({ error: error.message || 'Error al crear grupo' });
+  }
+});
+
+router.put('/student-groups/:id', async (req, res) => {
+  try {
+    const validatedId = validateId(req.params.id, 'ID de grupo');
+    const { name, description, isActive } = req.body;
+    const validatedName = validateNonEmptyString(name, 'Nombre');
+    await db.query(
+      `UPDATE student_groups SET name = ?, description = ?, is_active = ? WHERE id = ?`,
+      [validatedName, description || null, isActive !== false ? 1 : 0, validatedId]
+    );
+    if (isActive === false) {
+      await db.query('UPDATE students SET group_id = NULL WHERE group_id = ?', [validatedId]);
+    }
+    res.json({ success: true, message: 'Grupo actualizado' });
+  } catch (error) {
+    console.error('Error actualizando grupo:', error);
+    res.status(500).json({ error: error.message || 'Error al actualizar grupo' });
+  }
+});
+
+router.delete('/student-groups/:id', async (req, res) => {
+  try {
+    const validatedId = validateId(req.params.id, 'ID de grupo');
+    await db.query('UPDATE students SET group_id = NULL WHERE group_id = ?', [validatedId]);
+    await db.query('UPDATE student_groups SET is_active = 0 WHERE id = ?', [validatedId]);
+    res.json({ success: true, message: 'Grupo desactivado' });
+  } catch (error) {
+    console.error('Error desactivando grupo:', error);
+    res.status(500).json({ error: error.message || 'Error al desactivar grupo' });
+  }
+});
+
+router.put('/student-groups/:id/members', async (req, res) => {
+  try {
+    const validatedId = validateId(req.params.id, 'ID de grupo');
+    const { matriculas } = req.body;
+    if (!Array.isArray(matriculas)) {
+      return res.status(400).json({ error: 'matriculas debe ser un arreglo' });
+    }
+    const [group] = await db.query('SELECT id FROM student_groups WHERE id = ? AND is_active = 1', [validatedId]);
+    if (!group || group.length === 0) {
+      return res.status(404).json({ error: 'Grupo no encontrado o inactivo' });
+    }
+    const validatedMatriculas = [];
+    for (const m of matriculas) {
+      if (m && String(m).trim()) validatedMatriculas.push(validateMatricula(String(m).trim()));
+    }
+    await db.query('UPDATE students SET group_id = NULL WHERE group_id = ?', [validatedId]);
+    if (validatedMatriculas.length > 0) {
+      const placeholders = validatedMatriculas.map(() => '?').join(',');
+      await db.query(
+        `UPDATE students SET group_id = ? WHERE matricula IN (${placeholders}) AND status = 'active'`,
+        [validatedId, ...validatedMatriculas]
+      );
+    }
+    res.json({ success: true, message: `Grupo actualizado con ${validatedMatriculas.length} alumnos` });
+  } catch (error) {
+    console.error('Error asignando miembros:', error);
+    res.status(500).json({ error: error.message || 'Error al asignar miembros' });
+  }
+});
+
+async function resolveGroupId(groupId) {
+  if (groupId === null || groupId === undefined || groupId === '') return null;
+  const validatedId = validateId(groupId, 'ID de grupo');
+  const [rows] = await db.query('SELECT id FROM student_groups WHERE id = ? AND is_active = 1', [validatedId]);
+  if (!rows || rows.length === 0) throw new Error('Grupo no encontrado o inactivo');
+  return validatedId;
+}
 
 router.post('/asignar-materia', async (req, res) => {
   try {
@@ -223,9 +334,24 @@ router.post('/asignar-materia', async (req, res) => {
     if (existing && existing.length > 0) {
       return res.status(400).json({ error: 'Esta materia ya está asignada a este profesor para este semestre/grupo' });
     }
-    const [students] = await db.query(`SELECT matricula FROM students WHERE status = 'active'`);
-    if (!students || students.length === 0) {
-      return res.status(400).json({ error: 'No hay estudiantes activos para asignar' });
+    const gc = group_code && String(group_code).trim() !== '' ? String(group_code).trim() : null;
+    let students;
+    if (gc) {
+      [students] = await db.query(`
+        SELECT s.matricula FROM students s
+        INNER JOIN student_groups g ON s.group_id = g.id
+        WHERE s.status = 'active' AND g.group_code = ? AND g.is_active = 1
+      `, [gc]);
+      if (!students || students.length === 0) {
+        return res.status(400).json({ error: `No hay estudiantes activos en el grupo "${gc}"` });
+      }
+    } else {
+      [students] = await db.query(`
+        SELECT matricula FROM students WHERE status = 'active' AND group_id IS NULL
+      `);
+      if (!students || students.length === 0) {
+        return res.status(400).json({ error: 'No hay estudiantes activos sin grupo asignado' });
+      }
     }
     for (const student of students) {
       await db.query(`
@@ -270,6 +396,36 @@ router.get('/asignaciones', async (req, res) => {
   } catch (error) {
     console.error('Error obteniendo asignaciones:', error);
     res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
+router.delete('/asignaciones', async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const { subject_code, teacher_id, semester_code, group_code } = req.query;
+    if (!subject_code || !teacher_id || !semester_code) {
+      connection.release();
+      return res.status(400).json({ error: 'Faltan subject_code, teacher_id o semester_code' });
+    }
+    const validatedTeacherId = validateId(teacher_id, 'Teacher ID');
+    const validatedSubject = validateNonEmptyString(subject_code, 'Código de materia');
+    const validatedSemester = validateNonEmptyString(semester_code, 'Semestre');
+
+    await connection.beginTransaction();
+    await deleteAsignacion(connection, {
+      subjectCode: validatedSubject,
+      teacherId: validatedTeacherId,
+      semesterCode: validatedSemester,
+      groupCode: group_code
+    });
+    await connection.commit();
+    connection.release();
+    res.json({ success: true, message: 'Asignación eliminada' });
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    console.error('Error eliminando asignación:', error);
+    res.status(500).json({ error: error.message || 'Error al eliminar asignación' });
   }
 });
 
@@ -367,7 +523,12 @@ router.get('/semesters', async (req, res) => {
 // ============================================
 router.get('/students', async (req, res) => {
   try {
-    const [students] = await db.query(`SELECT * FROM students ORDER BY created_at DESC`);
+    const [students] = await db.query(`
+      SELECT s.*, s.group_id, g.group_code, g.name AS group_name
+      FROM students s
+      LEFT JOIN student_groups g ON s.group_id = g.id
+      ORDER BY s.created_at DESC
+    `);
     res.json({ students: students || [] });
   } catch (error) {
     console.error('Error obteniendo estudiantes:', error);
@@ -377,11 +538,12 @@ router.get('/students', async (req, res) => {
 
 router.post('/students', async (req, res) => {
   try {
-    const { matricula, firstName, lastName, email, password, dateOfBirth, phone, address, status } = req.body;
+    const { matricula, firstName, lastName, email, password, dateOfBirth, phone, address, status, groupId } = req.body;
     const validatedMatricula = validateMatricula(matricula);
     const validatedEmail = validateEmail(email);
     const validatedFirstName = validateNonEmptyString(firstName, 'Nombre');
     const validatedLastName = validateNonEmptyString(lastName, 'Apellido');
+    const resolvedGroupId = groupId ? await resolveGroupId(groupId) : null;
     
     const [existing] = await db.query('SELECT matricula FROM students WHERE matricula = ? OR email = ?', [validatedMatricula, validatedEmail]);
     if (existing && existing.length > 0) {
@@ -389,9 +551,9 @@ router.post('/students', async (req, res) => {
     }
     const passwordHash = await bcrypt.hash(password, 10);
     await db.query(`
-      INSERT INTO students (matricula, first_name, last_name, email, password_hash, date_of_birth, phone, address, status, admission_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())
-    `, [validatedMatricula, validatedFirstName, validatedLastName, validatedEmail, passwordHash, dateOfBirth, phone || null, address || null, status || 'active']);
+      INSERT INTO students (matricula, first_name, last_name, email, password_hash, date_of_birth, phone, address, status, admission_date, group_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)
+    `, [validatedMatricula, validatedFirstName, validatedLastName, validatedEmail, passwordHash, dateOfBirth, phone || null, address || null, status || 'active', resolvedGroupId]);
     res.json({ success: true, message: 'Estudiante creado exitosamente' });
   } catch (error) {
     console.error('Error creando estudiante:', error);
@@ -403,14 +565,17 @@ router.put('/students/:matricula', async (req, res) => {
   try {
     const { matricula } = req.params;
     const validatedMatricula = validateMatricula(matricula);
-    const { firstName, lastName, email, password, dateOfBirth, phone, address, status } = req.body;
+    const { firstName, lastName, email, password, dateOfBirth, phone, address, status, groupId } = req.body;
     
     const validatedFirstName = validateNonEmptyString(firstName, 'Nombre');
     const validatedLastName = validateNonEmptyString(lastName, 'Apellido');
     const validatedEmail = validateEmail(email);
+    const resolvedGroupId = groupId === null || groupId === '' || groupId === undefined
+      ? null
+      : await resolveGroupId(groupId);
     
-    let query = 'UPDATE students SET first_name = ?, last_name = ?, email = ?, date_of_birth = ?, phone = ?, address = ?, status = ?';
-    const params = [validatedFirstName, validatedLastName, validatedEmail, dateOfBirth, phone || null, address || null, status];
+    let query = 'UPDATE students SET first_name = ?, last_name = ?, email = ?, date_of_birth = ?, phone = ?, address = ?, status = ?, group_id = ?';
+    const params = [validatedFirstName, validatedLastName, validatedEmail, dateOfBirth, phone || null, address || null, status, resolvedGroupId];
     if (password && password.trim() !== '') {
       const passwordHash = await bcrypt.hash(password, 10);
       query += ', password_hash = ?';
@@ -427,14 +592,35 @@ router.put('/students/:matricula', async (req, res) => {
 });
 
 router.delete('/students/:matricula', async (req, res) => {
+  const permanent = req.query.permanent === 'true';
   try {
-    const { matricula } = req.params;
-    const validatedMatricula = validateMatricula(matricula);
-    await db.query('UPDATE students SET status = "inactive" WHERE matricula = ?', [validatedMatricula]);
-    res.json({ success: true, message: 'Estudiante desactivado' });
+    const validatedMatricula = validateMatricula(req.params.matricula);
+    const [existing] = await db.query('SELECT matricula FROM students WHERE matricula = ?', [validatedMatricula]);
+    if (!existing || existing.length === 0) {
+      return res.status(404).json({ error: 'Estudiante no encontrado' });
+    }
+
+    if (!permanent) {
+      await db.query('UPDATE students SET status = "inactive" WHERE matricula = ?', [validatedMatricula]);
+      return res.json({ success: true, message: 'Estudiante desactivado' });
+    }
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      await deleteStudentRecords(connection, validatedMatricula);
+      await connection.query('DELETE FROM students WHERE matricula = ?', [validatedMatricula]);
+      await connection.commit();
+      connection.release();
+      res.json({ success: true, message: 'Estudiante eliminado permanentemente' });
+    } catch (err) {
+      await connection.rollback();
+      connection.release();
+      throw err;
+    }
   } catch (error) {
-    console.error('Error desactivando estudiante:', error);
-    res.status(500).json({ error: error.message || 'Error al desactivar estudiante' });
+    console.error('Error eliminando estudiante:', error);
+    res.status(500).json({ error: error.message || 'Error al eliminar estudiante' });
   }
 });
 
@@ -504,14 +690,38 @@ router.put('/users/:id', async (req, res) => {
 });
 
 router.delete('/users/:id', async (req, res) => {
+  const permanent = req.query.permanent === 'true';
   try {
-    const { id } = req.params;
-    const validatedId = validateId(id, 'ID de usuario');
-    await db.query('UPDATE users SET is_active = FALSE, status = "inactive" WHERE id = ?', [validatedId]);
-    res.json({ success: true, message: 'Usuario desactivado' });
+    const validatedId = validateId(req.params.id, 'ID de usuario');
+    const [user] = await db.query('SELECT id, role FROM users WHERE id = ?', [validatedId]);
+    if (!user || user.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    if (user[0].role === 'admin') {
+      return res.status(400).json({ error: 'No se puede eliminar un usuario administrador desde aquí' });
+    }
+
+    if (!permanent) {
+      await db.query('UPDATE users SET is_active = FALSE, status = "inactive" WHERE id = ?', [validatedId]);
+      return res.json({ success: true, message: 'Usuario desactivado' });
+    }
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      await deleteTeacherRecords(connection, validatedId);
+      await connection.query('DELETE FROM users WHERE id = ?', [validatedId]);
+      await connection.commit();
+      connection.release();
+      res.json({ success: true, message: 'Usuario eliminado permanentemente' });
+    } catch (err) {
+      await connection.rollback();
+      connection.release();
+      throw err;
+    }
   } catch (error) {
-    console.error('Error desactivando usuario:', error);
-    res.status(500).json({ error: error.message || 'Error al desactivar usuario' });
+    console.error('Error eliminando usuario:', error);
+    res.status(500).json({ error: error.message || 'Error al eliminar usuario' });
   }
 });
 

@@ -15,7 +15,6 @@ function AlumnoDashboard() {
   const [loadingMaterias, setLoadingMaterias] = useState(true);
   const [error, setError] = useState('');
 
-  // Cargar materias del alumno
   useEffect(() => {
     const cargarMaterias = async () => {
       if (!user?.matricula) {
@@ -41,7 +40,6 @@ function AlumnoDashboard() {
     cargarMaterias();
   }, [user?.matricula]);
 
-  // Cargar datos según la pestaña (parcial o final)
   const cargarParcial = useCallback(async (parcialId, subjectCode) => {
     setLoading(true);
     setError('');
@@ -54,17 +52,14 @@ function AlumnoDashboard() {
       const response = await api.get('/grades/student-grades', {
         params: { matricula: user.matricula, parcialId, subjectCode }
       });
-      // La respuesta trae columns y grades
       const cols = response.data.columns || [];
       const grades = response.data.grades || [];
       const prom = response.data.promedio;
       setColumns(cols);
       setPromedio(prom);
-      // Transformar grades a un mapa accesible por nombre de columna
       const gradesMap = {};
       grades.forEach(g => { gradesMap[g.columnName] = g.value; });
-      // Construir una sola fila para este alumno (el dashboard solo muestra un alumno)
-      const row = [user.matricula, user.firstName + ' ' + user.lastName];
+      const row = [user.matricula, `${user.firstName} ${user.lastName}`];
       cols.forEach(col => {
         const val = gradesMap[col.name];
         const parsedVal = val !== undefined && val !== null ? parseFloat(val) : NaN;
@@ -98,7 +93,7 @@ function AlumnoDashboard() {
       setPromedio(prom);
       const gradesMap = {};
       grades.forEach(g => { gradesMap[g.columnName] = g.value; });
-      const row = [user.matricula, user.firstName + ' ' + user.lastName];
+      const row = [user.matricula, `${user.firstName} ${user.lastName}`];
       cols.forEach(col => {
         const val = gradesMap[col.name];
         const parsedVal = val !== undefined && val !== null ? parseFloat(val) : NaN;
@@ -134,7 +129,6 @@ function AlumnoDashboard() {
     }
   }, [user?.matricula]);
 
-  // Cuando cambia la materia o la pestaña, cargar los datos
   useEffect(() => {
     if (selectedMateria && user?.matricula) {
       if (activeTab === 5) {
@@ -148,57 +142,94 @@ function AlumnoDashboard() {
   }, [activeTab, selectedMateria, user?.matricula, cargarParcial, cargarFinal, cargarAsistencia]);
 
   const tabs = [
-    { id: 1, label: '📘 Parcial 1' },
-    { id: 2, label: '📗 Parcial 2' },
-    { id: 3, label: '📙 Parcial 3' },
-    { id: 4, label: '🎓 Calificación Final' },
-    { id: 5, label: '📅 Asistencia' }
+    { id: 1, label: 'Parcial 1', icon: '📘' },
+    { id: 2, label: 'Parcial 2', icon: '📗' },
+    { id: 3, label: 'Parcial 3', icon: '📙' },
+    { id: 4, label: 'Calificación Final', icon: '🎓' },
+    { id: 5, label: 'Asistencia', icon: '📅' }
   ];
 
+  const getGradeColor = (value) => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return { bg: '', text: '' };
+    if (num >= 9) return { bg: '#d1fae5', text: '#065f46' };
+    if (num >= 6) return { bg: '#fef3c7', text: '#92400e' };
+    return { bg: '#fee2e2', text: '#991b1b' };
+  };
+
   const renderTabContent = () => {
-    if (loading) return <div className="text-center py-8">Cargando...</div>;
+    if (loading) return (
+      <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280', fontFamily: 'DM Sans, sans-serif' }}>
+        <div style={{ marginBottom: '8px' }}>⏳</div>
+        Cargando información...
+      </div>
+    );
     
     if (activeTab === 5) {
-      if (!attendanceData || attendanceData.dates.length === 0) {
+      if (!attendanceData || attendanceData.dates?.length === 0) {
         return (
-          <div className="text-center py-8 text-gray-500">
+          <div style={{ textAlign: 'center', padding: '3rem', color: '#9ca3af', fontFamily: 'DM Sans, sans-serif' }}>
             No hay registros de asistencia para esta materia.
           </div>
         );
       }
       return (
         <div>
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-blue-50 p-4 rounded-lg text-center">
-              <p className="text-sm text-gray-600">Clases Totales</p>
-              <p className="text-2xl font-bold text-blue-700">{attendanceData.summary.total}</p>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '1rem',
+            marginBottom: '1.5rem'
+          }}>
+            <div style={{
+              background: '#eff6ff',
+              padding: '1rem',
+              borderRadius: '12px',
+              textAlign: 'center',
+              border: '0.5px solid #dbeafe'
+            }}>
+              <p style={{ fontSize: '12px', color: '#4b5563', marginBottom: '4px' }}>Clases Totales</p>
+              <p style={{ fontSize: '28px', fontWeight: 700, color: '#1e40af' }}>{attendanceData.summary?.total || 0}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg text-center">
-              <p className="text-sm text-gray-600">Asistencias</p>
-              <p className="text-2xl font-bold text-green-700">{attendanceData.summary.attended}</p>
+            <div style={{
+              background: '#f0fdf4',
+              padding: '1rem',
+              borderRadius: '12px',
+              textAlign: 'center',
+              border: '0.5px solid #dcfce7'
+            }}>
+              <p style={{ fontSize: '12px', color: '#4b5563', marginBottom: '4px' }}>Asistencias</p>
+              <p style={{ fontSize: '28px', fontWeight: 700, color: '#166534' }}>{attendanceData.summary?.attended || 0}</p>
             </div>
-            <div className="bg-indigo-50 p-4 rounded-lg text-center">
-              <p className="text-sm text-gray-600">Porcentaje</p>
-              <p className="text-2xl font-bold text-indigo-700">{attendanceData.summary.percentage}%</p>
+            <div style={{
+              background: '#f5f3ff',
+              padding: '1rem',
+              borderRadius: '12px',
+              textAlign: 'center',
+              border: '0.5px solid #ede9fe'
+            }}>
+              <p style={{ fontSize: '12px', color: '#4b5563', marginBottom: '4px' }}>Porcentaje</p>
+              <p style={{ fontSize: '28px', fontWeight: 700, color: '#5b21b6' }}>{attendanceData.summary?.percentage || 0}%</p>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border rounded-lg overflow-hidden">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="border px-4 py-2 text-left">Fecha</th>
-                  <th className="border px-4 py-2 text-center">Asistió</th>
+          
+          <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
+            <table style={{ width: '100%', backgroundColor: '#ffffff', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#374151' }}>Fecha</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, color: '#374151' }}>Asistió</th>
                 </tr>
               </thead>
               <tbody>
                 {attendanceData.dates.map((d, idx) => (
-                  <tr key={d.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="border px-4 py-2 font-medium">{d.date}</td>
-                    <td className="border px-4 py-2 text-center">
+                  <tr key={d.id} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
+                    <td style={{ padding: '10px 16px', borderBottom: '0.5px solid #f0f0f0' }}>{d.date}</td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '0.5px solid #f0f0f0' }}>
                       {d.present ? (
-                        <span className="text-green-600 font-bold">✔️ Sí</span>
+                        <span style={{ color: '#059669', fontWeight: 600 }}>✔️ Sí</span>
                       ) : (
-                        <span className="text-red-500 font-bold">❌ No</span>
+                        <span style={{ color: '#dc2626', fontWeight: 600 }}>❌ No</span>
                       )}
                     </td>
                   </tr>
@@ -212,43 +243,48 @@ function AlumnoDashboard() {
 
     if (columns.length === 0) {
       return (
-        <div className="text-center py-8 text-gray-500">
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#9ca3af', fontFamily: 'DM Sans, sans-serif' }}>
           No hay actividades configuradas para esta evaluación.
-          <p className="text-sm mt-2">Materia: {selectedMateria}</p>
         </div>
       );
     }
+
     return (
       <div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border rounded-lg overflow-hidden">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="border px-4 py-2 text-left">Matrícula</th>
-                <th className="border px-4 py-2 text-left">Alumno</th>
+        <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
+          <table style={{ width: '100%', backgroundColor: '#ffffff', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#374151' }}>Matrícula</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#374151' }}>Alumno</th>
                 {columns.map(col => (
-                  <th key={col.name} className="border px-4 py-2 text-center">
+                  <th key={col.name} style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 600, color: '#374151' }}>
                     {col.name}{col.isSpecial ? ' ⭐' : ''}
-                    <span className="text-xs block font-normal">
+                    <div style={{ fontSize: '10px', fontWeight: 400, color: '#6b7280', marginTop: '2px' }}>
                       ({col.weight}% / {col.maxValue})
-                    </span>
+                    </div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {data.map((row, rowIdx) => (
-                <tr key={rowIdx} className="hover:bg-gray-50">
+                <tr key={rowIdx} style={{ backgroundColor: rowIdx % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
                   {row.map((cell, cellIdx) => {
-                    let bgColor = '', textColor = '';
-                    if (cellIdx >= 2 && !isNaN(parseFloat(cell))) {
-                      const val = parseFloat(cell);
-                      if (val >= 9) { bgColor = 'bg-green-100'; textColor = 'text-green-800'; }
-                      else if (val >= 6) { bgColor = 'bg-yellow-100'; textColor = 'text-yellow-800'; }
-                      else if (val !== '') { bgColor = 'bg-red-100'; textColor = 'text-red-800'; }
-                    }
+                    const gradeColor = cellIdx >= 2 ? getGradeColor(cell) : { bg: '', text: '' };
+                    const isNumeric = cellIdx >= 2 && !isNaN(parseFloat(cell)) && cell !== '';
                     return (
-                      <td key={cellIdx} className={`border px-4 py-2 ${cellIdx === 0 || cellIdx === 1 ? 'font-medium' : 'text-center'} ${bgColor} ${textColor}`}>
+                      <td 
+                        key={cellIdx} 
+                        style={{
+                          padding: '10px 12px',
+                          borderBottom: '0.5px solid #f0f0f0',
+                          textAlign: cellIdx >= 2 ? 'center' : 'left',
+                          fontWeight: cellIdx < 2 ? 500 : 'normal',
+                          backgroundColor: gradeColor.bg,
+                          color: gradeColor.text
+                        }}
+                      >
                         {cell !== '' ? cell : '—'}
                       </td>
                     );
@@ -258,11 +294,21 @@ function AlumnoDashboard() {
             </tbody>
           </table>
         </div>
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg flex justify-between items-center">
-          <p className="text-lg font-semibold">
+        
+        <div style={{
+          marginTop: '1.5rem',
+          padding: '1rem 1.5rem',
+          background: '#f0f9ff',
+          borderRadius: '12px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderLeft: '4px solid #0284c7'
+        }}>
+          <p style={{ fontWeight: 600, color: '#0c4a6e' }}>
             {activeTab === 4 ? '🎯 Calificación Final Global:' : '📊 Calificación Final del Parcial:'}
           </p>
-          <p className="text-3xl font-bold text-blue-700">
+          <p style={{ fontSize: '28px', fontWeight: 700, color: '#0284c7' }}>
             {promedio !== null ? promedio.toFixed(2) : 'N/A'}
           </p>
         </div>
@@ -271,65 +317,195 @@ function AlumnoDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-lg p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-green-600">Calsys - Alumno</h1>
-        <div className="flex gap-4 items-center">
-          <span>Hola, {user?.firstName} {user?.lastName}</span>
-          <button onClick={logout} className="bg-red-500 text-white px-4 py-2 rounded">Salir</button>
-        </div>
-      </nav>
-      <div className="max-w-7xl mx-auto p-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-2xl font-bold mb-6">Mis Calificaciones</h2>
-          {error && (
-            <div className="mb-4 p-4 bg-red-100 text-red-800 rounded">
-              {error}
-            </div>
-          )}
-          {!error && !materias.length && !loadingMaterias && (
-            <div className="mb-4 p-4 bg-yellow-100 text-yellow-800 rounded">
-              No tienes materias asignadas.
-            </div>
-          )}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Materia</label>
-            {loadingMaterias ? (
-              <p>Cargando materias...</p>
-            ) : (
-              <select
-                value={selectedMateria}
-                onChange={(e) => setSelectedMateria(e.target.value)}
-                className="border rounded px-3 py-2 w-64"
-                disabled={!materias.length}
-              >
-                {materias.map(m => (
-                  <option key={m.subject_code} value={m.subject_code}>
-                    {m.subject_code} - {m.semester_code}
-                  </option>
-                ))}
-              </select>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+        
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+      `}</style>
+
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#f5f5f5',
+        fontFamily: 'DM Sans, sans-serif'
+      }}>
+        {/* Navbar */}
+        <nav style={{
+          background: '#880000',
+          padding: '0 2rem',
+          height: '56px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexShrink: 0
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '10px', height: '10px', background: '#ffffff', borderRadius: '50%' }} />
+            <span style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff' }}>Calsys · Alumno</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <span style={{ fontSize: '13px', color: '#ffffff' }}>
+              Hola, {user?.firstName} {user?.lastName}
+            </span>
+            <button 
+              onClick={logout} 
+              style={{
+                background: '#ffffff',
+                color: '#000000',
+                border: 'none',
+                borderRadius: '7px',
+                padding: '7px 16px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.target.style.background = '#929292'}
+              onMouseLeave={e => e.target.style.background = '#ffffff'}
+            >
+              Salir
+            </button>
+          </div>
+        </nav>
+
+        {/* Main Content */}
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1.5rem' }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            border: '0.5px solid #e5e7eb',
+            padding: '1.5rem',
+            boxShadow: '0 4px 32px rgba(0, 0, 0, 0.04)'
+          }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#111111', marginBottom: '1.5rem' }}>
+              Mis Calificaciones
+            </h2>
+
+            {error && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                marginBottom: '1.25rem',
+                background: '#fef2f2',
+                border: '0.5px solid #fca5a5',
+                color: '#c0392b'
+              }}>
+                {error}
+              </div>
             )}
-          </div>
-          <div className="border-b border-gray-200 mb-4">
-            <nav className="flex gap-2">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 text-sm font-medium rounded-t-lg ${
-                    activeTab === tab.id ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'
-                  }`}
+
+            {!error && !materias.length && !loadingMaterias && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                marginBottom: '1.25rem',
+                background: '#fffbeb',
+                border: '0.5px solid #fcd34b',
+                color: '#92400e'
+              }}>
+                No tienes materias asignadas.
+              </div>
+            )}
+
+            {/* Selector de materia */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '11px',
+                fontWeight: 500,
+                color: '#9ca3af',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                marginBottom: '6px'
+              }}>
+                Materia
+              </label>
+              {loadingMaterias ? (
+                <p style={{ fontSize: '13px', color: '#6b7280' }}>Cargando materias...</p>
+              ) : (
+                <select
+                  value={selectedMateria}
+                  onChange={(e) => setSelectedMateria(e.target.value)}
+                  disabled={!materias.length}
+                  style={{
+                    width: '100%',
+                    maxWidth: '300px',
+                    background: '#fafafa',
+                    border: '0.5px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    fontSize: '13px',
+                    color: '#111111',
+                    fontFamily: 'DM Sans, sans-serif',
+                    outline: 'none',
+                    cursor: materias.length ? 'pointer' : 'not-allowed',
+                    transition: 'border-color 0.2s, background 0.2s'
+                  }}
                 >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
+                  {materias.map(m => (
+                    <option key={m.subject_code} value={m.subject_code}>
+                      {m.subject_code} - {m.semester_code}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Tabs */}
+            <div style={{
+              borderBottom: '0.5px solid #e5e7eb',
+              marginBottom: '1.5rem'
+            }}>
+              <nav style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                {tabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 16px',
+                      borderRadius: '8px 8px 0 0',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      fontFamily: 'DM Sans, sans-serif',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      background: activeTab === tab.id ? '#880000' : '#f3f4f6',
+                      color: activeTab === tab.id ? '#ffffff' : '#4b5563'
+                    }}
+                    onMouseEnter={e => {
+                      if (activeTab !== tab.id) {
+                        e.target.style.background = '#e5e7eb';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (activeTab !== tab.id) {
+                        e.target.style.background = '#f3f4f6';
+                      }
+                    }}
+                  >
+                    <span>{tab.icon}</span>
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* Tab Content */}
+            {renderTabContent()}
           </div>
-          {renderTabContent()}
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

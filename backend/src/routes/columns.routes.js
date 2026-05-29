@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../config/database.js';
 import { validateId, safeNumber, safeDivision, safeAverage } from '../utils/validation.js';
+import { getEnrolledStudents, getEnrolledMatriculas } from '../utils/enrolledStudents.js';
 
 const router = express.Router();
 
@@ -114,7 +115,17 @@ router.get('/with-custom', async (req, res) => {
       ORDER BY display_order
     `, [validatedTeacherId, semester, subject, group]);
 
-    // Datos de estudiantes y calificaciones
+    const groupNorm = group && String(group).trim() !== '' ? group : null;
+    const enrolled = await getEnrolledStudents(db, {
+      teacherId: validatedTeacherId,
+      semester,
+      subject,
+      groupCode: groupNorm
+    });
+    if (enrolled.length === 0) {
+      return res.json({ grades: [], columns: columns || [] });
+    }
+    const matPlaceholders = enrolled.map(() => '?').join(',');
     const [grades] = await db.query(`
       SELECT 
         s.matricula, s.first_name, s.last_name,
@@ -122,12 +133,14 @@ router.get('/with-custom', async (req, res) => {
         fg.parcial_1, fg.parcial_2, fg.parcial_3, fg.ordinario,
         fg.promedio_parciales
       FROM students s
-      LEFT JOIN final_grades fg ON s.matricula = fg.student_matricula
-        AND fg.semester_code = ? AND fg.subject_code = ?
-        ${group ? 'AND fg.group_code = ?' : ''}
-      WHERE s.status = 'active'
+      INNER JOIN final_grades fg ON fg.student_matricula = s.matricula
+        AND fg.teacher_id = ?
+        AND fg.semester_code = ?
+        AND fg.subject_code = ?
+        AND (fg.group_code <=> ?)
+      WHERE s.status = 'active' AND s.matricula IN (${matPlaceholders})
       ORDER BY s.last_name, s.first_name
-    `, group ? [semester, subject, group] : [semester, subject]);
+    `, [validatedTeacherId, semester, subject, groupNorm, ...enrolled.map((s) => s.matricula)]);
 
     const gradeIds = grades.map(g => g.grade_id).filter(Boolean);
     let customValues = [];
@@ -231,34 +244,34 @@ router.post('/save-custom', async (req, res) => {
       }
     }
 
-    // Obtener todos los estudiantes activos (para asegurar que todos tengan registro)
-    const [students] = await connection.query(`SELECT matricula FROM students WHERE status = 'active'`);
+    const groupNorm = group && String(group).trim() !== '' ? group : null;
+    const matriculas = await getEnrolledMatriculas(connection, {
+      teacherId: validatedTeacherId,
+      semester,
+      subject,
+      groupCode: groupNorm
+    });
 
-    if (!students || students.length === 0) {
+    if (!matriculas || matriculas.length === 0) {
       await connection.rollback();
       connection.release();
-      return res.status(400).json({ error: 'No hay estudiantes activos' });
+      return res.status(400).json({ error: 'No hay estudiantes inscritos en esta clase' });
     }
 
-    for (const student of students) {
-      const matricula = student.matricula;
+    for (const matricula of matriculas) {
 
-      // Obtener o crear final_grades
       let [grades] = await connection.query(`
         SELECT id, parcial_1, parcial_2, parcial_3, ordinario, promedio_parciales
         FROM final_grades
-        WHERE student_matricula = ? AND semester_code = ? AND subject_code = ? AND group_code = ?
-      `, [matricula, semester, subject, group]);
+        WHERE student_matricula = ? AND semester_code = ? AND subject_code = ?
+          AND teacher_id = ? AND (group_code <=> ?)
+      `, [matricula, semester, subject, validatedTeacherId, groupNorm]);
 
       let gradeId;
       let p1 = null, p2 = null, p3 = null, ord = null, prom = null;
 
       if (grades.length === 0) {
-        const [result] = await connection.query(`
-          INSERT INTO final_grades (student_matricula, semester_code, subject_code, group_code, teacher_id, status)
-          VALUES (?, ?, ?, ?, ?, 'in_progress')
-        `, [matricula, semester, subject, group, validatedTeacherId]);
-        gradeId = result.insertId;
+        continue;
       } else {
         gradeId = grades[0].id;
         p1 = grades[0].parcial_1;

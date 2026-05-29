@@ -44,7 +44,6 @@ function GradesTable({ semester, subject, group, teacherId }) {
       if (group) params.group = group;
       const response = await api.get('/columns/with-custom', { params });
       const tableData = response.data.grades.map(g => {
-        // Columnas fijas: Matrícula, Nombre, Parcial1, Parcial2, Parcial3, Promedio (solo lectura), Ordinario
         const row = [
           g.matricula,
           g.nombre,
@@ -54,14 +53,12 @@ function GradesTable({ semester, subject, group, teacherId }) {
           g.promedio_parciales !== null ? parseFloat(g.promedio_parciales).toFixed(2) : '',
           g.ordinario !== null ? parseFloat(g.ordinario).toFixed(2) : ''
         ];
-        // Columnas personalizadas (no especiales)
         cols.forEach(col => {
           if (!col.is_special) {
             const val = g[`col_${col.id}`];
             row.push(val !== null ? parseFloat(val).toFixed(2) : '');
           }
         });
-        // Calificación final y estado
         row.push(g.final_grade !== null ? parseFloat(g.final_grade).toFixed(2) : '');
         row.push(g.status === 'passed' ? 'Aprobado' : g.status === 'failed' ? 'Reprobado' : 'En Progreso');
         return row;
@@ -95,26 +92,23 @@ function GradesTable({ semester, subject, group, teacherId }) {
       const parciales = {};
       const ordinarios = {};
 
-      const fixedColsCount = 8; // matricula, nombre, p1, p2, p3, promedio, ordinario, final, estado -> pero la final y estado están al final
-      // En realidad las columnas fijas son: 0 mat, 1 nom, 2 p1, 3 p2, 4 p3, 5 prom (readonly), 6 ordinario
-      // Luego vienen las personalizables, luego final y estado.
       const normalColumns = columns.filter(c => !c.is_special);
-      const personalStartIndex = 7; // después de ordinario
+      const personalStartIndex = 7;
 
       tableData.forEach(row => {
         const matricula = row[0];
-        // Parciales
         const p1 = row[2] !== '' ? parseFloat(row[2]) : null;
         const p2 = row[3] !== '' ? parseFloat(row[3]) : null;
         const p3 = row[4] !== '' ? parseFloat(row[4]) : null;
         const ord = row[6] !== '' ? parseFloat(row[6]) : null;
+        
         if (p1 !== null || p2 !== null || p3 !== null) {
           parciales[matricula] = { parcial_1: p1, parcial_2: p2, parcial_3: p3 };
         }
         if (ord !== null) {
           ordinarios[matricula] = ord;
         }
-        // Columnas personalizadas
+        
         normalColumns.forEach((col, idx) => {
           const val = row[personalStartIndex + idx];
           if (val !== '' && !isNaN(val)) {
@@ -125,7 +119,7 @@ function GradesTable({ semester, subject, group, teacherId }) {
 
       await api.post('/columns/save-custom', { values, parciales, ordinarios, semester, subject, group, teacherId });
       alert('✅ Calificaciones guardadas');
-      loadConfig(); // recargar para actualizar promedios y finales
+      loadConfig();
     } catch (error) {
       console.error(error);
       alert('Error al guardar calificaciones');
@@ -144,6 +138,7 @@ function GradesTable({ semester, subject, group, teacherId }) {
       { data: 5, title: '⭐ Promedio Parciales', readOnly: true, type: 'numeric', numericFormat: { pattern: '0.00' }, width: 150 },
       { data: 6, title: '📝 Evaluación Final', type: 'numeric', numericFormat: { pattern: '0.00' }, width: 130 }
     ];
+    
     const normalColumns = columns.filter(c => !c.is_special);
     normalColumns.forEach(col => {
       cols.push({
@@ -154,6 +149,7 @@ function GradesTable({ semester, subject, group, teacherId }) {
         width: 130
       });
     });
+    
     cols.push({
       data: 7 + cols.length,
       title: '🎯 CALIFICACION FINAL',
@@ -162,12 +158,14 @@ function GradesTable({ semester, subject, group, teacherId }) {
       numericFormat: { pattern: '0.00' },
       width: 140
     });
+    
     cols.push({
       data: 8 + cols.length,
       title: 'Estado',
       readOnly: true,
       width: 110
     });
+    
     return cols;
   };
 
@@ -177,7 +175,6 @@ function GradesTable({ semester, subject, group, teacherId }) {
     if (!hot) return;
 
     changes.forEach(([row, prop, oldValue, newValue]) => {
-      // Si cambió Parcial 1,2,3 o Evaluación Final, recalcular promedio y final
       if ([2, 3, 4, 6].includes(prop)) {
         const p1 = parseFloat(hot.getDataAtCell(row, 2)) || 0;
         const p2 = parseFloat(hot.getDataAtCell(row, 3)) || 0;
@@ -186,7 +183,7 @@ function GradesTable({ semester, subject, group, teacherId }) {
         hot.setDataAtCell(row, 5, promedio.toFixed(2), 'thisChange');
         recalcularFinal(hot, row);
       }
-      // Si cambió columna personalizada, recalcular final
+      
       const normalCount = columns.filter(c => !c.is_special).length;
       const personalStart = 7;
       if (prop >= personalStart && prop < personalStart + normalCount) {
@@ -208,6 +205,7 @@ function GradesTable({ semester, subject, group, teacherId }) {
       total += (promedio * (specialCol.weight / 100));
       pesoTotal += specialCol.weight;
     }
+    
     const normalColumns = columns.filter(c => !c.is_special);
     const personalStart = 7;
     normalColumns.forEach((col, idx) => {
@@ -219,6 +217,7 @@ function GradesTable({ semester, subject, group, teacherId }) {
         pesoTotal += w;
       }
     });
+    
     const finalGrade = pesoTotal > 0 ? parseFloat(total.toFixed(2)) : null;
     const finalColIndex = personalStart + normalColumns.length;
     hot.setDataAtCell(rowIndex, finalColIndex, finalGrade, 'thisChange');
@@ -226,22 +225,97 @@ function GradesTable({ semester, subject, group, teacherId }) {
     hot.setDataAtCell(rowIndex, finalColIndex + 1, status, 'thisChange');
   };
 
-  if (showConfig) return <ColumnConfig columns={columns} onSave={handleSaveConfig} onCancel={() => setShowConfig(false)} />;
-  if (loading) return <div className="text-center py-8">Cargando...</div>;
-  if (!semester || !subject) return <div className="text-center py-8 text-gray-500">Selecciona semestre y materia</div>;
+  if (showConfig) {
+    return <ColumnConfig columns={columns} onSave={handleSaveConfig} onCancel={() => setShowConfig(false)} />;
+  }
+
+  if (loading) {
+    return (
+      <div style={{ 
+        textAlign: 'center', 
+        padding: '2rem', 
+        fontFamily: 'DM Sans, sans-serif', 
+        color: '#6b7280' 
+      }}>
+        Cargando...
+      </div>
+    );
+  }
+
+  if (!semester || !subject) {
+    return (
+      <div style={{ 
+        textAlign: 'center', 
+        padding: '2rem', 
+        fontFamily: 'DM Sans, sans-serif', 
+        color: '#9ca3af' 
+      }}>
+        Selecciona semestre y materia
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <div className="mb-4 flex justify-between items-center">
-        <h3 className="text-lg font-semibold">{data.length} alumnos</h3>
-        <div className="flex gap-2">
-          <button onClick={() => setShowConfig(true)} className="bg-gray-600 text-white px-4 py-2 rounded">⚙️ Configurar Columnas</button>
-          <button onClick={handleSaveGrades} disabled={saving} className="bg-blue-600 text-white px-6 py-2 rounded disabled:opacity-50">
+    <div style={{ fontFamily: 'DM Sans, sans-serif' }}>
+      <div style={{
+        marginBottom: '1rem',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '0.5rem'
+      }}>
+        <h3 style={{ 
+          fontSize: '1rem', 
+          fontWeight: 600, 
+          color: '#111111',
+          margin: 0
+        }}>
+          {data.length} alumnos
+        </h3>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button 
+            onClick={() => setShowConfig(true)} 
+            style={{
+              background: '#4b5563',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={e => e.target.style.background = '#374151'}
+            onMouseLeave={e => e.target.style.background = '#4b5563'}
+          >
+            ⚙️ Configurar Columnas
+          </button>
+          <button 
+            onClick={handleSaveGrades} 
+            disabled={saving} 
+            style={{
+              background: '#880000',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 24px',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.5 : 1,
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={e => !saving && (e.target.style.background = '#6b0000')}
+            onMouseLeave={e => !saving && (e.target.style.background = '#880000')}
+          >
             {saving ? 'Guardando...' : 'Guardar Calificaciones'}
           </button>
         </div>
       </div>
-      <div className="overflow-x-auto">
+
+      <div style={{ overflowX: 'auto' }}>
         <HotTable
           ref={hotRef}
           data={data}
@@ -261,4 +335,4 @@ function GradesTable({ semester, subject, group, teacherId }) {
   );
 }
 
-export default GradesTable;
+export default GradesTable; 

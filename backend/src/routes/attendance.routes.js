@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../config/database.js';
 import { validateId, validateMatricula, safeNumber, safeDivision } from '../utils/validation.js';
+import { getEnrolledStudents } from '../utils/enrolledStudents.js';
 
 const router = express.Router();
 
@@ -71,13 +72,13 @@ router.get('/records', async (req, res) => {
     if (!teacherId || !semester || !subject) return res.status(400).json({ error: 'Faltan parámetros' });
     const validatedTeacherId = validateId(teacherId, 'Teacher ID');
 
-    // 1. Obtener alumnos
-    const [students] = await db.query(`
-      SELECT matricula, first_name, last_name
-      FROM students
-      WHERE status = 'active'
-      ORDER BY last_name, first_name
-    `);
+    const groupCode = group && group !== '' ? group : null;
+    const students = await getEnrolledStudents(db, {
+      teacherId: validatedTeacherId,
+      semester,
+      subject,
+      groupCode
+    });
 
     // 2. Obtener fechas de la clase
     let qDates = `
