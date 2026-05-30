@@ -97,7 +97,7 @@ function UsersManager() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#111111' }}>Gestión de usuarios y maestros</h2>
-        <button onClick={() => { resetForm(); setShowModal(true); }} style={{ background: '#10b981', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>+ Agregar Usuario</button>
+        <button onClick={() => { resetForm(); setShowModal(true); }} style={{ background: 'var(--brand)', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>+ Agregar Usuario</button>
       </div>
 
       <div style={{ background: '#ffffff', borderRadius: '12px', border: '0.5px solid #e5e7eb', padding: '1rem' }}>
@@ -151,7 +151,7 @@ function UsersManager() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '1.5rem' }}>
                 <button type="button" onClick={() => { setShowModal(false); resetForm(); }} style={{ padding: '8px 20px', border: '0.5px solid #e5e7eb', borderRadius: '8px', background: '#ffffff', cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: '#10b981', color: '#ffffff', cursor: 'pointer' }}>Guardar</button>
+                <button type="submit" style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: 'var(--brand)', color: '#ffffff', cursor: 'pointer' }}>Guardar</button>
               </div>
             </form>
           </div>

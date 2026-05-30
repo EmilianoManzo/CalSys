@@ -263,7 +263,7 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
             onClick={handleSaveGrades} 
             disabled={saving} 
             style={{
-              background: '#880000',
+              background: 'var(--brand)',
               color: '#ffffff',
               border: 'none',
               borderRadius: '8px',
@@ -274,8 +274,8 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
               opacity: saving ? 0.5 : 1,
               transition: 'background 0.2s'
             }}
-            onMouseEnter={e => !saving && (e.target.style.background = '#6b0000')}
-            onMouseLeave={e => !saving && (e.target.style.background = '#880000')}
+            onMouseEnter={e => !saving && (e.target.style.background = 'var(--brand-hover)')}
+            onMouseLeave={e => !saving && (e.target.style.background = 'var(--brand)')}
           >
             {saving ? 'Guardando...' : 'Guardar Calificaciones'}
           </button>
@@ -286,9 +286,9 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
         fontSize: '12px',
         marginBottom: '1rem',
         padding: '8px 12px',
-        backgroundColor: '#fef3c7',
+        backgroundColor: 'var(--warning-bg)',
         borderRadius: '8px',
-        color: '#92400e'
+        color: 'var(--warning-text)'
       }}>
         {!isCalificacionFinalTab
           ? `📊 La calificación final del ${partialId === EXAMEN_FINAL_PARTIAL_ID ? 'examen final' : 'parcial'} se calcula automáticamente al editar las notas.`

@@ -58,14 +58,14 @@ function PartialManager({ semester, subject, group, teacherId }) {
         }
 
         .pm-tab.pm-tab-active {
-          background: #880000;
+          background: var(--brand);
           color: #ffffff;
-          border-color: #880000;
+          border-color: var(--brand);
         }
 
         .pm-content {
           background: #ffffff;
-          border-radius: 12px;
+          border-radius: 8px;
           padding: 0;
         }
       `}</style>

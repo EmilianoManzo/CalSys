@@ -36,7 +36,7 @@ function Stats() {
 
   if (!stats) {
     return (
-      <div style={{ textAlign: 'center', padding: '3rem', color: '#dc2626', fontFamily: 'DM Sans, sans-serif' }}>
+      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--error)', fontFamily: 'DM Sans, sans-serif' }}>
         ❌ Error al cargar estadísticas
       </div>
     );
@@ -165,7 +165,7 @@ function Stats() {
         <button
           onClick={() => window.location.reload()}
           style={{
-            background: '#880000',
+            background: 'var(--brand)',
             color: '#ffffff',
             border: 'none',
             borderRadius: '8px',
@@ -175,8 +175,8 @@ function Stats() {
             cursor: 'pointer',
             transition: 'background 0.2s'
           }}
-          onMouseEnter={e => e.target.style.background = '#6b0000'}
-          onMouseLeave={e => e.target.style.background = '#880000'}
+          onMouseEnter={e => e.target.style.background = 'var(--brand-hover)'}
+          onMouseLeave={e => e.target.style.background = 'var(--brand)'}
         >
           🔄 Actualizar
         </button>

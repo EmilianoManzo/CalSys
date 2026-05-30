@@ -314,7 +314,7 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
           font-family: 'DM Sans', sans-serif !important;
           font-size: 13px !important;
           background-color: #ffffff !important;
-          border: 2px solid #880000 !important;
+          border: 2px solid var(--brand) !important;
           border-radius: 6px !important;
           padding: 4px 8px !important;
           box-shadow: 0 0 0 2px rgba(136, 0, 0, 0.1) !important;
@@ -331,12 +331,12 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
         }
 
         .handsontable .wtHolder::-webkit-scrollbar-thumb {
-          background: #c0392b;
+          background: var(--brand);
           border-radius: 4px;
         }
 
         .handsontable .wtHolder::-webkit-scrollbar-thumb:hover {
-          background: #880000;
+          background: var(--brand-hover);
         }
 
         .htContextMenu {
@@ -356,7 +356,7 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
         }
 
         .handsontable .manualColumnResizer:hover {
-          background-color: #880000 !important;
+          background-color: var(--brand) !important;
         }
 
         .handsontable .rowHeader {
@@ -386,7 +386,7 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
             gap: '12px'
           }}>
             <div style={{
-              background: '#880000',
+              background: 'var(--brand)',
               color: '#ffffff',
               borderRadius: '10px',
               padding: '6px 14px',
@@ -446,7 +446,7 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                background: saving ? '#9ca3af' : '#880000',
+                background: saving ? '#9ca3af' : 'var(--brand)',
                 color: '#ffffff',
                 border: 'none',
                 borderRadius: '10px',
@@ -460,14 +460,14 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
               }}
               onMouseEnter={(e) => {
                 if (!saving) {
-                  e.currentTarget.style.background = '#6b0000';
+                  e.currentTarget.style.background = 'var(--brand-hover)';
                   e.currentTarget.style.transform = 'translateY(-1px)';
                   e.currentTarget.style.boxShadow = '0 4px 8px rgba(136, 0, 0, 0.4)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (!saving) {
-                  e.currentTarget.style.background = '#880000';
+                  e.currentTarget.style.background = 'var(--brand)';
                   e.currentTarget.style.transform = 'translateY(0)';
                   e.currentTarget.style.boxShadow = '0 2px 4px rgba(136, 0, 0, 0.3)';
                 }
@@ -581,7 +581,7 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
         )}
 
         <div style={{ 
-          borderRadius: '12px',
+          borderRadius: '8px',
           border: '1px solid #e5e7eb',
           background: '#ffffff',
           overflow: 'hidden'

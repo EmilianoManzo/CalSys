@@ -114,14 +114,14 @@ function StudentsManager() {
   return (
     <div>
       {message.text && (
-        <div style={{ padding: '12px', borderRadius: '8px', marginBottom: '1rem', background: message.type === 'success' ? '#d1fae5' : '#fee2e2', color: message.type === 'success' ? '#065f46' : '#991b1b' }}>
+        <div style={{ padding: '12px', borderRadius: '8px', marginBottom: '1rem', background: message.type === 'success' ? 'var(--success-bg)' : 'var(--error-bg)', color: message.type === 'success' ? 'var(--success-text)' : 'var(--error-text)' }}>
           {message.text}
         </div>
       )}
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#111111' }}>👨‍🎓 Gestión de Estudiantes</h2>
-        <button onClick={() => { resetForm(); setShowModal(true); }} style={{ background: '#3b82f6', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>+ Agregar Estudiante</button>
+        <button onClick={() => { resetForm(); setShowModal(true); }} style={{ background: 'var(--brand)', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>+ Agregar Estudiante</button>
       </div>
 
       <div style={{ background: '#ffffff', borderRadius: '12px', border: '0.5px solid #e5e7eb', padding: '1rem' }}>
@@ -175,7 +175,7 @@ function StudentsManager() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '1.5rem' }}>
                 <button type="button" onClick={() => { setShowModal(false); resetForm(); }} style={{ padding: '8px 20px', border: '0.5px solid #e5e7eb', borderRadius: '8px', background: '#ffffff', cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: '#3b82f6', color: '#ffffff', cursor: 'pointer' }}>Guardar</button>
+                <button type="submit" style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: 'var(--brand)', color: '#ffffff', cursor: 'pointer' }}>Guardar</button>
               </div>
             </form>
           </div>

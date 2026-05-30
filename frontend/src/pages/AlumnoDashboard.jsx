@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
+import { gradeStyle } from '../theme';
+import justoSierraLogo from '../assets/justo-sierra-logo.jpg';
 
 function AlumnoDashboard() {
   const { user, logout } = useAuth();
@@ -150,11 +152,11 @@ function AlumnoDashboard() {
   ];
 
   const getGradeColor = (value) => {
-    const num = parseFloat(value);
-    if (isNaN(num)) return { bg: '', text: '' };
-    if (num >= 9) return { bg: '#d1fae5', text: '#065f46' };
-    if (num >= 6) return { bg: '#fef3c7', text: '#92400e' };
-    return { bg: '#fee2e2', text: '#991b1b' };
+    const style = gradeStyle(value);
+    if (value !== '' && !isNaN(parseFloat(value))) {
+      return { bg: style.soft.bg, text: style.soft.text };
+    }
+    return { bg: '', text: '' };
   };
 
   const renderTabContent = () => {
@@ -227,9 +229,9 @@ function AlumnoDashboard() {
                     <td style={{ padding: '10px 16px', borderBottom: '0.5px solid #f0f0f0' }}>{d.date}</td>
                     <td style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '0.5px solid #f0f0f0' }}>
                       {d.present ? (
-                        <span style={{ color: '#059669', fontWeight: 600 }}>✔️ Sí</span>
+                        <span style={{ color: 'var(--success)', fontWeight: 600 }}>✔️ Sí</span>
                       ) : (
-                        <span style={{ color: '#dc2626', fontWeight: 600 }}>❌ No</span>
+                        <span style={{ color: 'var(--error)', fontWeight: 600 }}>❌ No</span>
                       )}
                     </td>
                   </tr>
@@ -344,7 +346,11 @@ function AlumnoDashboard() {
           flexShrink: 0
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '10px', height: '10px', background: '#ffffff', borderRadius: '50%' }} />
+            <img
+              src={justoSierraLogo}
+              alt="Justo Sierra"
+              style={{ width: '26px', height: '26px', objectFit: 'cover', borderRadius: '50%', background: '#ffffff', boxShadow: '0 1px 5px rgba(0, 0, 0, 0.18)' }}
+            />
             <span style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff' }}>Calsys · Alumno</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -364,7 +370,7 @@ function AlumnoDashboard() {
                 cursor: 'pointer',
                 transition: 'background 0.2s'
               }}
-              onMouseEnter={e => e.target.style.background = '#929292'}
+              onMouseEnter={e => e.target.style.background = 'var(--text-secondary)'}
               onMouseLeave={e => e.target.style.background = '#ffffff'}
             >
               Salir
@@ -391,9 +397,9 @@ function AlumnoDashboard() {
                 borderRadius: '8px',
                 fontSize: '13px',
                 marginBottom: '1.25rem',
-                background: '#fef2f2',
-                border: '0.5px solid #fca5a5',
-                color: '#c0392b'
+                background: 'var(--error-bg)',
+                border: '0.5px solid var(--error-border)',
+                color: 'var(--error-text)'
               }}>
                 {error}
               </div>
@@ -405,9 +411,9 @@ function AlumnoDashboard() {
                 borderRadius: '8px',
                 fontSize: '13px',
                 marginBottom: '1.25rem',
-                background: '#fffbeb',
-                border: '0.5px solid #fcd34b',
-                color: '#92400e'
+                background: 'var(--warning-bg)',
+                border: '0.5px solid #f59e0b',
+                color: 'var(--warning-text)'
               }}>
                 No tienes materias asignadas.
               </div>

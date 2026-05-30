@@ -3,6 +3,7 @@ import { HotTable } from '@handsontable/react';
 import { registerAllModules } from 'handsontable/registry';
 import 'handsontable/dist/handsontable.full.min.css';
 import api from '../../api/axios';
+import { gradeStyle, colors } from '../../theme';
 
 registerAllModules();
 
@@ -208,13 +209,13 @@ function GradesViewer() {
                   td.innerHTML = value !== null && value !== '' ? parseFloat(value).toFixed(2) : 'N/A';
                   td.style.fontWeight = 'bold';
                   td.style.textAlign = 'center';
+                  const style = gradeStyle(value);
                   if (value !== null && value !== '' && !isNaN(parseFloat(value))) {
-                    const val = parseFloat(value);
-                    if (val >= 9) { td.style.backgroundColor = '#10b981'; td.style.color = 'white'; }
-                    else if (val >= 6) { td.style.backgroundColor = '#3b82f6'; td.style.color = 'white'; }
-                    else { td.style.backgroundColor = '#ef4444'; td.style.color = 'white'; }
+                    td.style.backgroundColor = style.solid;
+                    td.style.color = 'white';
                   } else {
-                    td.style.backgroundColor = '#fef3c7'; td.style.color = '#92400e';
+                    td.style.backgroundColor = style.bg;
+                    td.style.color = style.text;
                   }
                   return td;
                 };

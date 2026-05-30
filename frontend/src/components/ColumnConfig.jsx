@@ -142,7 +142,7 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
               <span style={{
                 fontSize: '24px',
                 fontWeight: 700,
-                color: totalWeight > 100 ? '#dc2626' : totalWeight === 100 ? '#10b981' : '#f59e0b'
+                color: totalWeight > 100 ? 'var(--error)' : totalWeight === 100 ? 'var(--success)' : 'var(--warning)'
               }}>
                 {totalWeight.toFixed(1)}%
               </span>
@@ -151,7 +151,7 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
               <div style={{
                 height: '100%',
                 transition: 'all 0.3s',
-                backgroundColor: totalWeight > 100 ? '#dc2626' : totalWeight === 100 ? '#10b981' : '#f59e0b',
+                backgroundColor: totalWeight > 100 ? 'var(--error)' : totalWeight === 100 ? 'var(--success)' : 'var(--warning)',
                 width: `${Math.min(totalWeight, 100)}%`
               }} />
             </div>
@@ -176,7 +176,7 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
                       width: '32px',
                       height: '32px',
                       borderRadius: '9999px',
-                      backgroundColor: col.is_special ? '#d97706' : '#880000',
+                      backgroundColor: col.is_special ? 'var(--warning)' : 'var(--brand)',
                       color: '#ffffff',
                       display: 'flex',
                       alignItems: 'center',
@@ -190,7 +190,7 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
                       {col.name || `Columna ${idx + 1}`}
                       {col.is_special && <span style={{ marginLeft: '8px', fontSize: '11px', backgroundColor: '#fef3c7', color: '#d97706', padding: '2px 6px', borderRadius: '9999px' }}>Especial</span>}
                       {col.type === 'text' && <span style={{ marginLeft: '8px', fontSize: '11px', backgroundColor: '#e5e7eb', color: '#4b5563', padding: '2px 6px', borderRadius: '9999px' }}>Texto</span>}
-                      {col.required && <span style={{ marginLeft: '8px', fontSize: '11px', backgroundColor: '#fee2e2', color: '#dc2626', padding: '2px 6px', borderRadius: '9999px' }}>Obligatoria</span>}
+                      {col.required && <span style={{ marginLeft: '8px', fontSize: '11px', backgroundColor: 'var(--error-bg)', color: 'var(--error)', padding: '2px 6px', borderRadius: '9999px' }}>Obligatoria</span>}
                     </h3>
                   </div>
 
@@ -302,7 +302,7 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
                           fontWeight: 600,
                           border: 'none',
                           cursor: col.is_special ? 'not-allowed' : 'pointer',
-                          backgroundColor: col.is_special ? '#e5e7eb' : '#dc2626',
+                          backgroundColor: col.is_special ? '#e5e7eb' : 'var(--error)',
                           color: col.is_special ? '#9ca3af' : '#ffffff',
                           fontSize: '12px'
                         }}
@@ -321,9 +321,9 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
             style={{
               marginTop: '1rem',
               width: '100%',
-              border: '2px dashed #880000',
-              backgroundColor: '#fef2f2',
-              color: '#880000',
+              border: '2px dashed var(--brand)',
+              backgroundColor: 'var(--error-bg)',
+              color: 'var(--brand)',
               padding: '12px',
               borderRadius: '12px',
               fontWeight: 600,
@@ -338,11 +338,11 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
           <div style={{
             marginTop: '1.5rem',
             backgroundColor: '#fef2f2',
-            borderLeft: '4px solid #880000',
+            borderLeft: '4px solid var(--brand)',
             borderRadius: '8px',
             padding: '1rem'
           }}>
-            <p style={{ fontWeight: 700, color: '#880000', marginBottom: '8px' }}>💡 Consejos:</p>
+            <p style={{ fontWeight: 700, color: 'var(--brand)', marginBottom: '8px' }}>💡 Consejos:</p>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '13px', color: '#7f1d1d' }}>
               {showSpecialColumn && <li>• <strong>Columnas especiales:</strong> Se calculan automáticamente y solo puedes ajustar su peso.</li>}
               <li>• <strong>Numérico:</strong> Para calificaciones que suman a la nota final.</li>
@@ -364,7 +364,7 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
         }}>
           <div>
             <div style={{ fontSize: '13px', color: '#6b7280' }}>{localColumns.length} columnas</div>
-            <div style={{ fontSize: '18px', fontWeight: 700, color: totalWeight > 100 ? '#dc2626' : totalWeight === 100 ? '#10b981' : '#f59e0b' }}>
+            <div style={{ fontSize: '18px', fontWeight: 700, color: totalWeight > 100 ? 'var(--error)' : totalWeight === 100 ? 'var(--success)' : 'var(--warning)' }}>
               Total: {totalWeight.toFixed(1)}% / 100%
             </div>
           </div>
@@ -389,7 +389,7 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
                 padding: '8px 24px',
                 border: 'none',
                 borderRadius: '8px',
-                backgroundColor: '#880000',
+                backgroundColor: 'var(--brand)',
                 color: '#ffffff',
                 fontWeight: 600,
                 cursor: 'pointer',

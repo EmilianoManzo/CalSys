@@ -8,6 +8,8 @@ import GroupsManager from '../components/admin/GroupsManager';
 import api from '../api/axios';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 import { Pie, Bar } from 'react-chartjs-2';
+import { colors } from '../theme';
+import justoSierraLogo from '../assets/justo-sierra-logo.jpg';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
@@ -61,7 +63,7 @@ function AdminDashboard() {
     labels: ['Aprobados', 'Reprobados', 'En Progreso'],
     datasets: [{
       data: [stats.passed, stats.failed, stats.inProgress],
-      backgroundColor: ['#10b981', '#ef4444', '#f59e0b'],
+      backgroundColor: [colors.success, colors.errorStrong, colors.warning],
       borderWidth: 0
     }]
   };
@@ -77,7 +79,7 @@ function AdminDashboard() {
     datasets: [{
       label: 'Promedio',
       data: subjectAverages,
-      backgroundColor: '#880000',
+      backgroundColor: colors.brand,
       borderRadius: 8
     }]
   };
@@ -105,7 +107,11 @@ function AdminDashboard() {
         {/* Navbar */}
         <nav style={{ background: '#880000', padding: '0 2rem', height: '56px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '10px', height: '10px', background: '#ffffff', borderRadius: '50%' }} />
+            <img
+              src={justoSierraLogo}
+              alt="Justo Sierra"
+              style={{ width: '26px', height: '26px', objectFit: 'cover', borderRadius: '50%', background: '#ffffff', boxShadow: '0 1px 5px rgba(0, 0, 0, 0.18)' }}
+            />
             <span style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff' }}>Calsys · Administrador</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -113,7 +119,7 @@ function AdminDashboard() {
             <button 
               onClick={logout} 
               style={{ background: '#ffffff', color: '#000000', border: 'none', borderRadius: '7px', padding: '7px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer', transition: 'background 0.2s' }}
-              onMouseEnter={e => e.target.style.background = '#929292'}
+              onMouseEnter={e => e.target.style.background = 'var(--text-secondary)'}
               onMouseLeave={e => e.target.style.background = '#ffffff'}
             >
               Salir
@@ -240,7 +246,7 @@ function AdminDashboard() {
                                 {stats.subjectStats.map((subj, idx) => {
                                   const promedio = Number(subj.promedio);
                                   const isInvalid = isNaN(promedio);
-                                  const barColor = isInvalid ? '#9ca3af' : (promedio < 6 ? '#ef4444' : (promedio < 7 ? '#f59e0b' : '#10b981'));
+                                  const barColor = isInvalid ? colors.neutral : (promedio < 6 ? colors.errorStrong : (promedio < 9 ? colors.warning : colors.success));
                                   const percent = isInvalid ? 0 : (promedio / 10) * 100;
                                   return (
                                     <tr key={idx} style={{ borderBottom: '0.5px solid #f0f0f0' }}>

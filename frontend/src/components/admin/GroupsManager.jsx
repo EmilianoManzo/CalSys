@@ -144,7 +144,7 @@ function GroupsManager() {
         <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#111111' }}>Grupos de estudiantes</h2>
         <button
           onClick={() => { resetForm(); setShowModal(true); }}
-          style={{ background: '#3b82f6', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
+          style={{ background: 'var(--brand)', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
         >
           + Nuevo grupo
         </button>
@@ -231,7 +231,7 @@ function GroupsManager() {
               )}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '1rem' }}>
                 <button type="button" onClick={() => { setShowModal(false); resetForm(); }} style={{ padding: '8px 20px', border: '0.5px solid #e5e7eb', borderRadius: '8px', background: '#ffffff', cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: '#3b82f6', color: '#ffffff', cursor: 'pointer' }}>Guardar</button>
+                <button type="submit" style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: 'var(--brand)', color: '#ffffff', cursor: 'pointer' }}>Guardar</button>
               </div>
             </form>
           </div>
@@ -268,7 +268,7 @@ function GroupsManager() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '1rem' }}>
               <button type="button" onClick={() => { setShowMembersModal(false); setManagingGroup(null); }} style={{ padding: '8px 20px', border: '0.5px solid #e5e7eb', borderRadius: '8px', background: '#ffffff', cursor: 'pointer' }}>Cancelar</button>
-              <button type="button" onClick={saveMembers} style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: '#10b981', color: '#ffffff', cursor: 'pointer' }}>Guardar</button>
+              <button type="button" onClick={saveMembers} style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: 'var(--brand)', color: '#ffffff', cursor: 'pointer' }}>Guardar</button>
             </div>
           </div>
         </div>

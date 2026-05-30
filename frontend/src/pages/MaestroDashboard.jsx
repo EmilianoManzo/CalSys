@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import PartialManager from '../components/PartialManager';
 import api from '../api/axios';
+import justoSierraLogo from '../assets/justo-sierra-logo.jpg';
 
 function MaestroDashboard() {
   const { user, logout } = useAuth();
@@ -115,10 +116,13 @@ function MaestroDashboard() {
         }
 
         .maestro-nav-dot {
-          width: 10px;
-          height: 10px;
+          width: 26px;
+          height: 26px;
           background: #ffffff;
           border-radius: 50%;
+          object-fit: cover;
+          display: block;
+          box-shadow: 0 1px 5px rgba(0, 0, 0, 0.18);
         }
 
         .maestro-nav-title {
@@ -152,7 +156,7 @@ function MaestroDashboard() {
         }
 
         .maestro-nav-btn:hover {
-          background: #929292;
+          background: var(--text-secondary);
         }
 
         .maestro-main-content {
@@ -185,15 +189,15 @@ function MaestroDashboard() {
         }
 
         .maestro-alert-error {
-          background: #fef2f2;
-          border: 0.5px solid #fca5a5;
-          color: #c0392b;
+          background: var(--error-bg);
+          border: 0.5px solid var(--error-border);
+          color: var(--error-text);
         }
 
         .maestro-alert-warning {
-          background: #fffbeb;
-          border: 0.5px solid #fcd34b;
-          color: #92400e;
+          background: var(--warning-bg);
+          border: 0.5px solid #f59e0b;
+          color: var(--warning-text);
         }
 
         .maestro-grid {
@@ -228,7 +232,7 @@ function MaestroDashboard() {
         }
 
         .maestro-select:focus {
-          border-color: #c0392b;
+          border-color: var(--brand);
           background: #ffffff;
         }
 
@@ -253,7 +257,7 @@ function MaestroDashboard() {
       <div className="maestro-wrapper">
         <nav className="maestro-nav">
           <div className="maestro-nav-left">
-            <div className="maestro-nav-dot" />
+            <img className="maestro-nav-dot" src={justoSierraLogo} alt="Justo Sierra" />
             <span className="maestro-nav-title">Calsys · Maestro</span>
           </div>
           <div className="maestro-nav-right">

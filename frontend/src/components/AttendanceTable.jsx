@@ -90,8 +90,8 @@ function AttendanceTable({ semester, subject, group, teacherId }) {
     form: { display: 'flex', gap: '0.5rem', alignItems: 'center' },
     label: { fontSize: '13px', fontWeight: 500, color: '#374151' },
     input: { border: '0.5px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontFamily: 'DM Sans, sans-serif' },
-    addBtn: { background: '#10b981', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' },
-    saveBtn: { background: '#880000', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 24px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' },
+    addBtn: { background: 'var(--brand)', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' },
+    saveBtn: { background: 'var(--brand)', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 24px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' },
     table: { width: '100%', backgroundColor: '#ffffff', border: '0.5px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', fontSize: '13px' },
     th: { borderBottom: '0.5px solid #e5e7eb', padding: '12px 8px', textAlign: 'left', backgroundColor: '#f9fafb', fontWeight: 600, color: '#374151' },
     td: { borderBottom: '0.5px solid #e5e7eb', padding: '10px 8px' },
@@ -142,7 +142,7 @@ function AttendanceTable({ semester, subject, group, teacherId }) {
                       <span>{d.class_date}</span>
                       <button 
                         onClick={() => handleDeleteDate(d.id)}
-                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '11px' }}
+                        style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '11px' }}
                         title="Eliminar fecha"
                       >
                         ✕
@@ -164,7 +164,7 @@ function AttendanceTable({ semester, subject, group, teacherId }) {
                         type="checkbox" 
                         checked={row[`date_${d.id}`] || false}
                         onChange={() => handleToggle(row.matricula, d.id)}
-                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#880000' }}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--brand)' }}
                       />
                     </td>
                   ))}

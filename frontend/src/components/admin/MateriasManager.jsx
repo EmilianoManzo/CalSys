@@ -120,8 +120,8 @@ function MateriasManager() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#111111' }}>📚 Gestión de Materias</h2>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={() => setShowModal(true)} style={{ background: '#3b82f6', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>+ Nueva Materia</button>
-          <button onClick={() => setShowAsignarModal(true)} style={{ background: '#10b981', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>📌 Asignar</button>
+          <button onClick={() => setShowModal(true)} style={{ background: 'var(--brand)', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>+ Nueva Materia</button>
+          <button onClick={() => setShowAsignarModal(true)} style={{ background: 'var(--brand)', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>📌 Asignar</button>
         </div>
       </div>
 
@@ -184,7 +184,7 @@ function MateriasManager() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '1rem' }}>
                 <button type="button" onClick={() => setShowModal(false)} style={{ padding: '8px 20px', border: '0.5px solid #e5e7eb', borderRadius: '8px', background: '#ffffff', cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: '#3b82f6', color: '#ffffff', cursor: 'pointer' }}>Crear</button>
+                <button type="submit" style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: 'var(--brand)', color: '#ffffff', cursor: 'pointer' }}>Crear</button>
               </div>
             </form>
           </div>
@@ -228,12 +228,12 @@ function MateriasManager() {
                   {grupos.map(g => <option key={g} value={g}>Grupo {g}</option>)}
                 </select>
               </div>
-              <div style={{ background: '#fffbeb', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', color: '#92400e', marginBottom: '1rem' }}>
+              <div style={{ background: 'var(--warning-bg)', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', color: 'var(--warning-text)', marginBottom: '1rem' }}>
                 Solo se inscribirán los alumnos del grupo seleccionado. Si deja &quot;Sin grupo&quot;, solo alumnos sin grupo asignado.
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button type="button" onClick={() => setShowAsignarModal(false)} style={{ padding: '8px 20px', border: '0.5px solid #e5e7eb', borderRadius: '8px', background: '#ffffff', cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: '#10b981', color: '#ffffff', cursor: 'pointer' }}>Asignar</button>
+                <button type="submit" style={{ padding: '8px 24px', border: 'none', borderRadius: '8px', background: 'var(--brand)', color: '#ffffff', cursor: 'pointer' }}>Asignar</button>
               </div>
             </form>
           </div>

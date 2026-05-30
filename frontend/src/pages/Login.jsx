@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import justoSierraLogo from '../assets/justo-sierra-logo.jpg';
 
 const roles = ['alumno', 'maestro', 'admin'];
 const roleLabels = { alumno: 'Alumno', maestro: 'Maestro', admin: 'Director' };
@@ -60,24 +61,24 @@ function Login() {
         }
 
         .login-icon {
-          width: 52px;
-          height: 52px;
-          background: #c0392b;
-          border-radius: 14px;
+          width: 64px;
+          height: 64px;
+          background: #ffffff;
+          border: 1px solid #f1f1f1;
+          border-radius: 50%;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          margin-bottom: 1rem;
+          margin-bottom: 0.9rem;
+          overflow: hidden;
+          box-shadow: 0 3px 14px rgba(136, 0, 0, 0.14);
         }
 
-        .login-icon svg {
-          width: 26px;
-          height: 26px;
-          stroke: white;
-          fill: none;
-          stroke-width: 2;
-          stroke-linecap: round;
-          stroke-linejoin: round;
+        .login-icon img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
         }
 
         .login-title {
@@ -119,7 +120,7 @@ function Login() {
 
         .role-tab.active {
           background: #ffffff;
-          color: #c0392b;
+          color: var(--brand);
           box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
         }
 
@@ -152,7 +153,7 @@ function Login() {
         }
 
         .login-input:focus {
-          border-color: #c0392b;
+          border-color: var(--brand);
           background: #ffffff;
         }
 
@@ -161,9 +162,9 @@ function Login() {
         }
 
         .login-error {
-          background: #fef2f2;
-          border: 0.5px solid #fca5a5;
-          color: #c0392b;
+          background: var(--error-bg);
+          border: 0.5px solid var(--error-border);
+          color: var(--error-text);
           padding: 10px 14px;
           border-radius: 8px;
           font-size: 13px;
@@ -173,7 +174,7 @@ function Login() {
         .login-btn {
           width: 100%;
           padding: 13px;
-          background: #c0392b;
+          background: var(--brand);
           border: none;
           border-radius: 8px;
           color: white;
@@ -187,7 +188,7 @@ function Login() {
         }
 
         .login-btn:hover:not(:disabled) {
-          background: #a93226;
+          background: var(--brand-hover);
         }
 
         .login-btn:disabled {
@@ -198,7 +199,7 @@ function Login() {
         .login-footer {
           text-align: center;
           font-size: 12px;
-          color: #c0392b;
+          color: var(--brand);
           margin-top: 1.5rem;
           cursor: pointer;
         }
@@ -208,12 +209,10 @@ function Login() {
         <div className="login-card">
           <div className="login-brand">
             <div className="login-icon">
-              <svg viewBox="0 0 24 24">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
+              <img src={justoSierraLogo} alt="Justo Sierra" />
             </div>
-            <h1 className="login-title">Bienvenido</h1>
-            <p className="login-subtitle">Sistema Escolar · Inicia sesión</p>
+            <h1 className="login-title">Bienvenido a Justo Sierra</h1>
+            <p className="login-subtitle">CalSys · Sistema Escolar</p>
           </div>
 
           <div className="role-tabs">
