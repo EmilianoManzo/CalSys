@@ -1,5 +1,6 @@
 import express from 'express';
 import db from '../config/database.js';
+import { sendServerError } from '../middleware/security.js';
 import { validateId, validateMatricula, safeNumber, safeDivision } from '../utils/validation.js';
 import { getEnrolledStudents } from '../utils/enrolledStudents.js';
 
@@ -34,7 +35,7 @@ router.get('/dates', async (req, res) => {
     res.json({ dates: dates || [] });
   } catch (error) {
     console.error('Error obteniendo fechas:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -58,7 +59,7 @@ router.post('/dates', async (req, res) => {
       return res.status(400).json({ error: 'Esa fecha ya está registrada.' });
     }
     console.error('Error agregando fecha:', error);
-    res.status(500).json({ error: error.message || 'Error al agregar fecha' });
+    sendServerError(res, 'Error al agregar fecha');
   }
 });
 
@@ -71,7 +72,7 @@ router.delete('/dates/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error eliminando fecha:', error);
-    res.status(500).json({ error: error.message || 'Error al eliminar fecha' });
+    sendServerError(res, 'Error al eliminar fecha');
   }
 });
 
@@ -132,7 +133,7 @@ router.get('/records', async (req, res) => {
     res.json({ dates: dates || [], records: result || [] });
   } catch (error) {
     console.error('Error obteniendo registros:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -169,7 +170,7 @@ router.post('/records', async (req, res) => {
     await connection.rollback();
     connection.release();
     console.error('Error guardando registros:', error);
-    res.status(500).json({ error: error.message || 'Error al guardar registros' });
+    sendServerError(res, 'Error al guardar registros');
   }
 });
 
@@ -240,7 +241,7 @@ router.get('/student', async (req, res) => {
     res.json({ dates: finalDates || [], summary });
   } catch (error) {
     console.error('Error obteniendo asistencia del estudiante:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 

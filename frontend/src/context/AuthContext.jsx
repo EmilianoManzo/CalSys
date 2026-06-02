@@ -11,7 +11,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       if (token) {
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         try {
@@ -19,8 +19,8 @@ export const AuthProvider = ({ children }) => {
           setUser(response.data.user);
         } catch (error) {
           console.error('Error al verificar token:', error);
-          localStorage.removeItem('token');
-          localStorage.removeItem('csrfToken');
+          sessionStorage.removeItem('token');
+          sessionStorage.removeItem('csrfToken');
           delete api.defaults.headers.common['Authorization'];
         }
       }
@@ -33,8 +33,8 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await api.post('/auth/login', { username, password, role });
       const { token, csrfToken, user: userData } = response.data;
-      localStorage.setItem('token', token);
-      localStorage.setItem('csrfToken', csrfToken);
+      sessionStorage.setItem('token', token);
+      sessionStorage.setItem('csrfToken', csrfToken);
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(userData);
       return { success: true, role: userData.role };
@@ -45,8 +45,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('csrfToken');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('csrfToken');
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
   };

@@ -1,5 +1,6 @@
 import express from 'express';
 import db from '../config/database.js';
+import { sendServerError } from '../middleware/security.js';
 import { validateId, validateMatricula, safeNumber, safeDivision, safeAverage } from '../utils/validation.js';
 
 const router = express.Router();
@@ -39,7 +40,7 @@ router.get('/teacher/subjects', async (req, res) => {
     res.json({ subjects: subjects || [] });
   } catch (error) {
     console.error('Error en /teacher/subjects:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -61,7 +62,7 @@ router.get('/subject/groups', async (req, res) => {
     res.json({ groups: groups || [] });
   } catch (error) {
     console.error('Error en /subject/groups:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -85,7 +86,7 @@ router.get('/student-subjects', async (req, res) => {
     res.json({ subjects: subjects || [] });
   } catch (error) {
     console.error('Error en /student-subjects:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -142,7 +143,7 @@ router.get('/student-grades', async (req, res) => {
     res.json({ columns: columns || [], grades: grades || [], promedio });
   } catch (error) {
     console.error('Error en /student-grades:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -279,7 +280,7 @@ router.get('/student-final', async (req, res) => {
     res.json({ columns: columns || [], grades: finalGrades, promedio: finalGlobal });
   } catch (error) {
     console.error('Error en /student-final:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 

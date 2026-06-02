@@ -1,5 +1,6 @@
 import express from 'express';
 import db from '../config/database.js';
+import { sendServerError } from '../middleware/security.js';
 import { validateId, validateMatricula, safeNumber, safeDivision, safeAverage } from '../utils/validation.js';
 import { getEnrolledStudents } from '../utils/enrolledStudents.js';
 
@@ -188,7 +189,7 @@ router.get('/config', async (req, res) => {
     res.json({ columns: columns || [] });
   } catch (error) {
     console.error('Error en GET /config:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -257,7 +258,7 @@ router.post('/config', async (req, res) => {
     await connection.rollback();
     connection.release();
     console.error(error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -488,7 +489,7 @@ router.get('/grades', async (req, res) => {
     res.json({ grades: result || [], columns: columns || [] });
   } catch (error) {
     console.error('Error en GET /grades:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -556,7 +557,7 @@ router.post('/save-grades', async (req, res) => {
     await connection.rollback();
     connection.release();
     console.error(error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 

@@ -6,6 +6,18 @@ const ALLOWED_ROLES = new Set(['admin', 'director', 'maestro', 'alumno']);
 const MAX_STRING_LENGTH = 500;
 const MAX_ARRAY_LENGTH = 1000;
 const JWT_ALGORITHM = 'HS256';
+const CSP_DIRECTIVES = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "object-src 'none'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "upgrade-insecure-requests"
+].join('; ');
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -13,6 +25,19 @@ function getJwtSecret() {
     throw new Error('JWT_SECRET must be set to at least 32 characters');
   }
   return secret;
+}
+
+export function logSecurityEvent(req, event, details = {}) {
+  console.warn(JSON.stringify({
+    event,
+    ip: req.ip || req.socket?.remoteAddress || 'unknown',
+    userId: req.user?.id || null,
+    role: req.user?.role || null,
+    method: req.method,
+    path: req.originalUrl?.split('?')[0] || req.path,
+    timestamp: new Date().toISOString(),
+    ...details
+  }));
 }
 
 function cleanString(value) {
@@ -41,6 +66,34 @@ export function sanitizeRequest(req, res, next) {
   req.body = sanitizeValue(req.body) || {};
   req.query = sanitizeValue(req.query) || {};
   req.params = sanitizeValue(req.params) || {};
+  next();
+}
+
+export function securityHeaders(req, res, next) {
+  res.set({
+    'Content-Security-Policy': CSP_DIRECTIVES,
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    'Origin-Agent-Cluster': '?1',
+    'Referrer-Policy': 'no-referrer',
+    'Strict-Transport-Security': 'max-age=15552000; includeSubDomains',
+    'X-Content-Type-Options': 'nosniff',
+    'X-DNS-Prefetch-Control': 'off',
+    'X-Download-Options': 'noopen',
+    'X-Frame-Options': 'DENY',
+    'X-Permitted-Cross-Domain-Policies': 'none',
+    'X-XSS-Protection': '0'
+  });
+  if (req.path.startsWith('/api')) {
+    res.set('Cache-Control', 'private, no-store');
+  }
+  next();
+}
+
+export function requireJsonBody(req, res, next) {
+  if (!SAFE_METHODS.has(req.method) && !req.is('application/json')) {
+    return res.status(415).json({ error: 'Content-Type application/json requerido' });
+  }
   next();
 }
 
@@ -74,6 +127,7 @@ export function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization || '';
   const [scheme, token] = authHeader.split(' ');
   if (scheme !== 'Bearer' || !token) {
+    logSecurityEvent(req, 'auth_missing_token');
     return res.status(401).json({ error: 'Autenticacion requerida' });
   }
 
@@ -84,11 +138,13 @@ export function authenticateToken(req, res, next) {
       audience: process.env.JWT_AUDIENCE || 'calsys-web'
     });
     if (!ALLOWED_ROLES.has(decoded.role)) {
+      logSecurityEvent(req, 'auth_invalid_role', { tokenRole: decoded.role });
       return res.status(403).json({ error: 'Acceso no autorizado' });
     }
     req.user = decoded;
     next();
   } catch {
+    logSecurityEvent(req, 'auth_invalid_token');
     return res.status(401).json({ error: 'Token invalido' });
   }
 }
@@ -96,6 +152,7 @@ export function authenticateToken(req, res, next) {
 export function requireRoles(...roles) {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
+      logSecurityEvent(req, 'permission_denied', { requiredRoles: roles });
       return res.status(403).json({ error: 'Acceso no autorizado' });
     }
     next();
@@ -116,7 +173,14 @@ export function verifyOrigin(req, res, next) {
   const allowed = configuredOrigins();
   const source = origin || referer;
   if (!source) return res.status(403).json({ error: 'Origen requerido' });
-  if (!allowed.some((allowedOrigin) => source.startsWith(allowedOrigin))) {
+  let sourceOrigin;
+  try {
+    sourceOrigin = new URL(source).origin;
+  } catch {
+    return res.status(403).json({ error: 'Origen no permitido' });
+  }
+  if (!allowed.includes(sourceOrigin)) {
+    logSecurityEvent(req, 'origin_denied', { origin: sourceOrigin });
     return res.status(403).json({ error: 'Origen no permitido' });
   }
   next();
@@ -126,6 +190,7 @@ export function verifyCsrf(req, res, next) {
   if (SAFE_METHODS.has(req.method)) return next();
   const csrfHeader = req.headers['x-csrf-token'];
   if (!req.user?.csrfToken || csrfHeader !== req.user.csrfToken) {
+    logSecurityEvent(req, 'csrf_denied');
     return res.status(403).json({ error: 'Token CSRF invalido' });
   }
   next();
@@ -141,12 +206,15 @@ export function enforceScopedAccess(req, res, next) {
   const matricula = req.query.matricula ?? req.body.matricula;
 
   if (teacherId !== undefined && role === 'maestro' && !valueMatches(teacherId, req.user.id)) {
+    logSecurityEvent(req, 'scope_denied', { scope: 'teacherId' });
     return res.status(403).json({ error: 'Acceso no autorizado' });
   }
   if (teacherId !== undefined && role === 'alumno') {
+    logSecurityEvent(req, 'scope_denied', { scope: 'teacherId' });
     return res.status(403).json({ error: 'Acceso no autorizado' });
   }
   if (matricula !== undefined && role === 'alumno' && !valueMatches(matricula, req.user.matricula)) {
+    logSecurityEvent(req, 'scope_denied', { scope: 'matricula' });
     return res.status(403).json({ error: 'Acceso no autorizado' });
   }
   next();
@@ -154,4 +222,8 @@ export function enforceScopedAccess(req, res, next) {
 
 export function genericError(message = 'Error en el servidor') {
   return { error: message };
+}
+
+export function sendServerError(res, message = 'Error en el servidor') {
+  return res.status(500).json(genericError(message));
 }

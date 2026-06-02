@@ -1,6 +1,8 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../config/database.js';
+import { sendServerError } from '../middleware/security.js';
+import { cacheAside, invalidateCache, setCacheControl } from '../utils/cache.js';
 import { validateId, validateMatricula, validateEmail, validateNonEmptyString, validateEnum, safeNumber, safeAverage } from '../utils/validation.js';
 import { deleteAsignacion, deleteAllSubjectData, deleteStudentRecords, deleteTeacherRecords } from '../utils/deleteAssignment.js';
 
@@ -79,7 +81,7 @@ router.get('/stats', async (req, res) => {
     });
   } catch (error) {
     console.error('Error obteniendo estadísticas:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res, 'Error en el servidor');
   }
 });
 
@@ -88,19 +90,23 @@ router.get('/stats', async (req, res) => {
 // ============================================
 router.get('/materias', async (req, res) => {
   try {
-    const [materias] = await db.query(`
-      SELECT m.*, 
-        COUNT(DISTINCT fg.student_matricula) as total_estudiantes,
-        COUNT(DISTINCT fg.teacher_id) as total_maestros
-      FROM materias m
-      LEFT JOIN final_grades fg ON m.subject_code = fg.subject_code
-      GROUP BY m.id
-      ORDER BY m.subject_code
-    `);
+    const materias = await cacheAside('admin:materias', 60_000, async () => {
+      const [rows] = await db.query(`
+        SELECT m.*, 
+          COUNT(DISTINCT fg.student_matricula) as total_estudiantes,
+          COUNT(DISTINCT fg.teacher_id) as total_maestros
+        FROM materias m
+        LEFT JOIN final_grades fg ON m.subject_code = fg.subject_code
+        GROUP BY m.id
+        ORDER BY m.subject_code
+      `);
+      return rows || [];
+    });
+    setCacheControl(res, 'private, max-age=60');
     res.json({ materias: materias || [] });
   } catch (error) {
     console.error('Error obteniendo materias:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res, 'Error en el servidor');
   }
 });
 
@@ -122,10 +128,11 @@ router.post('/materias', async (req, res) => {
       INSERT INTO materias (subject_code, subject_name, credits, description)
       VALUES (?, ?, ?, ?)
     `, [validatedCode.toUpperCase(), validatedName, validatedCredits, description || null]);
+    invalidateCache('admin:materias');
     res.json({ success: true, message: 'Materia creada exitosamente' });
   } catch (error) {
     console.error('Error creando materia:', error);
-    res.status(500).json({ error: error.message || 'Error al crear materia' });
+    sendServerError(res, 'Error al crear materia');
   }
 });
 
@@ -142,10 +149,11 @@ router.put('/materias/:id', async (req, res) => {
       SET subject_name = ?, credits = ?, description = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [validatedName, validatedCredits, description, validatedId]);
+    invalidateCache('admin:materias');
     res.json({ success: true, message: 'Materia actualizada' });
   } catch (error) {
     console.error('Error actualizando materia:', error);
-    res.status(500).json({ error: error.message || 'Error al actualizar materia' });
+    sendServerError(res, 'Error al actualizar materia');
   }
 });
 
@@ -164,44 +172,53 @@ router.delete('/materias/:id', async (req, res) => {
     await connection.query('DELETE FROM materias WHERE id = ?', [validatedId]);
     await connection.commit();
     connection.release();
+    invalidateCache('admin:materias');
     res.json({ success: true, message: 'Materia y todas sus asignaciones eliminadas' });
   } catch (error) {
     await connection.rollback();
     connection.release();
     console.error('Error eliminando materia:', error);
-    res.status(500).json({ error: error.message || 'Error al eliminar materia' });
+    sendServerError(res, 'Error al eliminar materia');
   }
 });
 
 router.get('/profesores', async (req, res) => {
   try {
-    const [profesores] = await db.query(`
-      SELECT id, username, first_name, last_name, email, role
-      FROM users 
-      WHERE role IN ('maestro', 'admin')
-      AND status = 'active'
-      AND is_active = 1
-      ORDER BY first_name, last_name
-    `);
+    const profesores = await cacheAside('admin:profesores', 60_000, async () => {
+      const [rows] = await db.query(`
+        SELECT id, username, first_name, last_name, email, role
+        FROM users 
+        WHERE role IN ('maestro', 'admin')
+        AND status = 'active'
+        AND is_active = 1
+        ORDER BY first_name, last_name
+      `);
+      return rows || [];
+    });
+    setCacheControl(res, 'private, max-age=60');
     res.json({ profesores: profesores || [] });
   } catch (error) {
     console.error('Error obteniendo profesores:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res, 'Error en el servidor');
   }
 });
 
 router.get('/grupos', async (req, res) => {
   try {
-    const [grupos] = await db.query(`
-      SELECT group_code
-      FROM student_groups
-      WHERE is_active = 1
-      ORDER BY group_code
-    `);
+    const grupos = await cacheAside('admin:grupos', 60_000, async () => {
+      const [rows] = await db.query(`
+        SELECT group_code
+        FROM student_groups
+        WHERE is_active = 1
+        ORDER BY group_code
+      `);
+      return rows || [];
+    });
+    setCacheControl(res, 'private, max-age=60');
     res.json({ grupos: grupos ? grupos.map(g => g.group_code) : [] });
   } catch (error) {
     console.error('Error obteniendo grupos:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res, 'Error en el servidor');
   }
 });
 
@@ -210,18 +227,22 @@ router.get('/grupos', async (req, res) => {
 // ============================================
 router.get('/student-groups', async (req, res) => {
   try {
-    const [groups] = await db.query(`
-      SELECT sg.id, sg.group_code, sg.name, sg.description, sg.is_active, sg.created_at,
-        COUNT(CASE WHEN s.status = 'active' THEN s.matricula END) AS member_count
-      FROM student_groups sg
-      LEFT JOIN students s ON s.group_id = sg.id
-      GROUP BY sg.id
-      ORDER BY sg.group_code
-    `);
+    const groups = await cacheAside('admin:student-groups', 30_000, async () => {
+      const [rows] = await db.query(`
+        SELECT sg.id, sg.group_code, sg.name, sg.description, sg.is_active, sg.created_at,
+          COUNT(CASE WHEN s.status = 'active' THEN s.matricula END) AS member_count
+        FROM student_groups sg
+        LEFT JOIN students s ON s.group_id = sg.id
+        GROUP BY sg.id
+        ORDER BY sg.group_code
+      `);
+      return rows || [];
+    });
+    setCacheControl(res, 'private, max-age=30');
     res.json({ groups: groups || [] });
   } catch (error) {
     console.error('Error obteniendo grupos de estudiantes:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res, 'Error en el servidor');
   }
 });
 
@@ -238,10 +259,12 @@ router.post('/student-groups', async (req, res) => {
       `INSERT INTO student_groups (group_code, name, description) VALUES (?, ?, ?)`,
       [validatedCode, validatedName, description || null]
     );
+    invalidateCache('admin:grupos');
+    invalidateCache('admin:student-groups');
     res.json({ success: true, id: result.insertId, message: 'Grupo creado' });
   } catch (error) {
     console.error('Error creando grupo:', error);
-    res.status(500).json({ error: error.message || 'Error al crear grupo' });
+    sendServerError(res, 'Error al crear grupo');
   }
 });
 
@@ -257,10 +280,12 @@ router.put('/student-groups/:id', async (req, res) => {
     if (isActive === false) {
       await db.query('UPDATE students SET group_id = NULL WHERE group_id = ?', [validatedId]);
     }
+    invalidateCache('admin:grupos');
+    invalidateCache('admin:student-groups');
     res.json({ success: true, message: 'Grupo actualizado' });
   } catch (error) {
     console.error('Error actualizando grupo:', error);
-    res.status(500).json({ error: error.message || 'Error al actualizar grupo' });
+    sendServerError(res, 'Error al actualizar grupo');
   }
 });
 
@@ -269,10 +294,12 @@ router.delete('/student-groups/:id', async (req, res) => {
     const validatedId = validateId(req.params.id, 'ID de grupo');
     await db.query('UPDATE students SET group_id = NULL WHERE group_id = ?', [validatedId]);
     await db.query('UPDATE student_groups SET is_active = 0 WHERE id = ?', [validatedId]);
+    invalidateCache('admin:grupos');
+    invalidateCache('admin:student-groups');
     res.json({ success: true, message: 'Grupo desactivado' });
   } catch (error) {
     console.error('Error desactivando grupo:', error);
-    res.status(500).json({ error: error.message || 'Error al desactivar grupo' });
+    sendServerError(res, 'Error al desactivar grupo');
   }
 });
 
@@ -299,10 +326,11 @@ router.put('/student-groups/:id/members', async (req, res) => {
         [validatedId, ...validatedMatriculas]
       );
     }
+    invalidateCache('admin:student-groups');
     res.json({ success: true, message: `Grupo actualizado con ${validatedMatriculas.length} alumnos` });
   } catch (error) {
     console.error('Error asignando miembros:', error);
-    res.status(500).json({ error: error.message || 'Error al asignar miembros' });
+    sendServerError(res, 'Error al asignar miembros');
   }
 });
 
@@ -360,10 +388,11 @@ router.post('/asignar-materia', async (req, res) => {
         VALUES (?, ?, ?, ?, ?, 'in_progress')
       `, [student.matricula, semester_code, subject_code, group_code, validatedTeacherId]);
     }
+    invalidateCache('admin:materias');
     res.json({ success: true, message: `Materia asignada a ${students.length} estudiantes` });
   } catch (error) {
     console.error('Error asignando materia:', error);
-    res.status(500).json({ error: error.message || 'Error al asignar materia' });
+    sendServerError(res, 'Error al asignar materia');
   }
 });
 
@@ -420,12 +449,13 @@ router.delete('/asignaciones', async (req, res) => {
     });
     await connection.commit();
     connection.release();
+    invalidateCache('admin:materias');
     res.json({ success: true, message: 'Asignación eliminada' });
   } catch (error) {
     await connection.rollback();
     connection.release();
     console.error('Error eliminando asignación:', error);
-    res.status(500).json({ error: error.message || 'Error al eliminar asignación' });
+    sendServerError(res, 'Error al eliminar asignación');
   }
 });
 
@@ -532,7 +562,7 @@ router.get('/students', async (req, res) => {
     res.json({ students: students || [] });
   } catch (error) {
     console.error('Error obteniendo estudiantes:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res, 'Error en el servidor');
   }
 });
 
@@ -556,10 +586,11 @@ router.post('/students', async (req, res) => {
       INSERT INTO students (matricula, first_name, last_name, email, password_hash, date_of_birth, phone, address, status, admission_date, group_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)
     `, [validatedMatricula, validatedFirstName, validatedLastName, validatedEmail, passwordHash, dateOfBirth, phone || null, address || null, validatedStatus, resolvedGroupId]);
+    invalidateCache('admin:student-groups');
     res.json({ success: true, message: 'Estudiante creado exitosamente' });
   } catch (error) {
     console.error('Error creando estudiante:', error);
-    res.status(500).json({ error: error.message || 'Error al crear estudiante' });
+    sendServerError(res, 'Error al crear estudiante');
   }
 });
 
@@ -587,10 +618,11 @@ router.put('/students/:matricula', async (req, res) => {
     query += ' WHERE matricula = ?';
     params.push(validatedMatricula);
     await db.query(query, params);
+    invalidateCache('admin:student-groups');
     res.json({ success: true, message: 'Estudiante actualizado' });
   } catch (error) {
     console.error('Error actualizando estudiante:', error);
-    res.status(500).json({ error: error.message || 'Error al actualizar estudiante' });
+    sendServerError(res, 'Error al actualizar estudiante');
   }
 });
 
@@ -605,6 +637,7 @@ router.delete('/students/:matricula', async (req, res) => {
 
     if (!permanent) {
       await db.query('UPDATE students SET status = "inactive" WHERE matricula = ?', [validatedMatricula]);
+      invalidateCache('admin:student-groups');
       return res.json({ success: true, message: 'Estudiante desactivado' });
     }
 
@@ -615,6 +648,7 @@ router.delete('/students/:matricula', async (req, res) => {
       await connection.query('DELETE FROM students WHERE matricula = ?', [validatedMatricula]);
       await connection.commit();
       connection.release();
+      invalidateCache('admin:student-groups');
       res.json({ success: true, message: 'Estudiante eliminado permanentemente' });
     } catch (err) {
       await connection.rollback();
@@ -623,7 +657,7 @@ router.delete('/students/:matricula', async (req, res) => {
     }
   } catch (error) {
     console.error('Error eliminando estudiante:', error);
-    res.status(500).json({ error: error.message || 'Error al eliminar estudiante' });
+    sendServerError(res, 'Error al eliminar estudiante');
   }
 });
 
@@ -636,7 +670,7 @@ router.get('/users', async (req, res) => {
     res.json({ users: users || [] });
   } catch (error) {
     console.error('Error obteniendo usuarios:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res, 'Error en el servidor');
   }
 });
 
@@ -659,10 +693,11 @@ router.post('/users', async (req, res) => {
       INSERT INTO users (username, first_name, last_name, email, password_hash, role, phone, is_active, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
     `, [validatedUsername, validatedFirstName, validatedLastName, validatedEmail, passwordHash, validatedRole, phone || null, isActive !== false]);
+    invalidateCache('admin:profesores');
     res.json({ success: true, message: 'Usuario creado' });
   } catch (error) {
     console.error('Error creando usuario:', error);
-    res.status(500).json({ error: error.message || 'Error al crear usuario' });
+    sendServerError(res, 'Error al crear usuario');
   }
 });
 
@@ -688,10 +723,11 @@ router.put('/users/:id', async (req, res) => {
     query += ' WHERE id = ?';
     params.push(validatedId);
     await db.query(query, params);
+    invalidateCache('admin:profesores');
     res.json({ success: true, message: 'Usuario actualizado' });
   } catch (error) {
     console.error('Error actualizando usuario:', error);
-    res.status(500).json({ error: error.message || 'Error al actualizar usuario' });
+    sendServerError(res, 'Error al actualizar usuario');
   }
 });
 
@@ -709,6 +745,7 @@ router.delete('/users/:id', async (req, res) => {
 
     if (!permanent) {
       await db.query('UPDATE users SET is_active = FALSE, status = "inactive" WHERE id = ?', [validatedId]);
+      invalidateCache('admin:profesores');
       return res.json({ success: true, message: 'Usuario desactivado' });
     }
 
@@ -719,6 +756,7 @@ router.delete('/users/:id', async (req, res) => {
       await connection.query('DELETE FROM users WHERE id = ?', [validatedId]);
       await connection.commit();
       connection.release();
+      invalidateCache('admin:profesores');
       res.json({ success: true, message: 'Usuario eliminado permanentemente' });
     } catch (err) {
       await connection.rollback();
@@ -727,7 +765,7 @@ router.delete('/users/:id', async (req, res) => {
     }
   } catch (error) {
     console.error('Error eliminando usuario:', error);
-    res.status(500).json({ error: error.message || 'Error al eliminar usuario' });
+    sendServerError(res, 'Error al eliminar usuario');
   }
 });
 

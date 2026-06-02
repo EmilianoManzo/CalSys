@@ -1,7 +1,8 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../config/database.js';
-import { authenticateToken, createCsrfToken, signAuthToken } from '../middleware/security.js';
+import { authenticateToken, createCsrfToken, logSecurityEvent, signAuthToken } from '../middleware/security.js';
+import { clearAuthFailures, recordAuthFailure } from '../middleware/rateLimit.js';
 import { validateEnum, validateNonEmptyString } from '../utils/validation.js';
 
 const router = express.Router();
@@ -39,13 +40,19 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user) {
+      recordAuthFailure(validatedUsername, validatedRole);
+      logSecurityEvent(req, 'login_failed', { username: validatedUsername, requestedRole: validatedRole });
       return res.status(401).json({ error: 'Credenciales invalidas' });
     }
 
     const isValid = await bcrypt.compare(String(password), user.password_hash);
     if (!isValid) {
+      recordAuthFailure(validatedUsername, validatedRole);
+      logSecurityEvent(req, 'login_failed', { username: validatedUsername, requestedRole: validatedRole });
       return res.status(401).json({ error: 'Credenciales invalidas' });
     }
+    clearAuthFailures(validatedUsername, validatedRole);
+    logSecurityEvent(req, 'login_success', { userId: user.id, requestedRole: validatedRole });
 
     const csrfToken = createCsrfToken();
     const token = signAuthToken({

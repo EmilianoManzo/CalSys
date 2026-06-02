@@ -9,6 +9,7 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'calsys_db',
   port: process.env.DB_PORT || 3306,
+  connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS || 10000),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0

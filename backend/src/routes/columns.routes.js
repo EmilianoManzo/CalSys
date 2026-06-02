@@ -1,5 +1,6 @@
 import express from 'express';
 import db from '../config/database.js';
+import { sendServerError } from '../middleware/security.js';
 import { validateId, safeNumber, safeDivision, safeAverage } from '../utils/validation.js';
 import { getEnrolledStudents, getEnrolledMatriculas } from '../utils/enrolledStudents.js';
 
@@ -23,7 +24,7 @@ router.get('/config', async (req, res) => {
     res.json({ columns: columns || [] });
   } catch (error) {
     console.error('Error obteniendo configuracion:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -97,7 +98,7 @@ router.post('/config', async (req, res) => {
     await connection.rollback();
     connection.release();
     console.error('Error guardando configuracion:', error);
-    res.status(500).json({ error: error.message || 'Error al guardar configuracion' });
+    sendServerError(res, 'Error al guardar configuracion');
   }
 });
 
@@ -176,7 +177,7 @@ router.get('/with-custom', async (req, res) => {
     res.json({ grades: result || [], columns: columns || [] });
   } catch (error) {
     console.error('Error obteniendo calificaciones:', error);
-    res.status(500).json({ error: error.message || 'Error en el servidor' });
+    sendServerError(res);
   }
 });
 
@@ -341,7 +342,7 @@ router.post('/save-custom', async (req, res) => {
     await connection.rollback();
     connection.release();
     console.error('Error guardando:', error);
-    res.status(500).json({ error: error.message || 'Error al guardar calificaciones' });
+    sendServerError(res, 'Error al guardar calificaciones');
   }
 });
 
