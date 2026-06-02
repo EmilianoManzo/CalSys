@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../config/database.js';
-import { validateId, validateMatricula, validateEmail, validateNonEmptyString, safeNumber, safeAverage } from '../utils/validation.js';
+import { validateId, validateMatricula, validateEmail, validateNonEmptyString, validateEnum, safeNumber, safeAverage } from '../utils/validation.js';
 import { deleteAsignacion, deleteAllSubjectData, deleteStudentRecords, deleteTeacherRecords } from '../utils/deleteAssignment.js';
 
 const router = express.Router();
@@ -543,6 +543,8 @@ router.post('/students', async (req, res) => {
     const validatedEmail = validateEmail(email);
     const validatedFirstName = validateNonEmptyString(firstName, 'Nombre');
     const validatedLastName = validateNonEmptyString(lastName, 'Apellido');
+    const validatedStatus = validateEnum(status || 'active', ['active', 'inactive'], 'Estado');
+    validateNonEmptyString(password, 'Password');
     const resolvedGroupId = groupId ? await resolveGroupId(groupId) : null;
     
     const [existing] = await db.query('SELECT matricula FROM students WHERE matricula = ? OR email = ?', [validatedMatricula, validatedEmail]);
@@ -553,7 +555,7 @@ router.post('/students', async (req, res) => {
     await db.query(`
       INSERT INTO students (matricula, first_name, last_name, email, password_hash, date_of_birth, phone, address, status, admission_date, group_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)
-    `, [validatedMatricula, validatedFirstName, validatedLastName, validatedEmail, passwordHash, dateOfBirth, phone || null, address || null, status || 'active', resolvedGroupId]);
+    `, [validatedMatricula, validatedFirstName, validatedLastName, validatedEmail, passwordHash, dateOfBirth, phone || null, address || null, validatedStatus, resolvedGroupId]);
     res.json({ success: true, message: 'Estudiante creado exitosamente' });
   } catch (error) {
     console.error('Error creando estudiante:', error);
@@ -570,12 +572,13 @@ router.put('/students/:matricula', async (req, res) => {
     const validatedFirstName = validateNonEmptyString(firstName, 'Nombre');
     const validatedLastName = validateNonEmptyString(lastName, 'Apellido');
     const validatedEmail = validateEmail(email);
+    const validatedStatus = validateEnum(status || 'active', ['active', 'inactive'], 'Estado');
     const resolvedGroupId = groupId === null || groupId === '' || groupId === undefined
       ? null
       : await resolveGroupId(groupId);
     
     let query = 'UPDATE students SET first_name = ?, last_name = ?, email = ?, date_of_birth = ?, phone = ?, address = ?, status = ?, group_id = ?';
-    const params = [validatedFirstName, validatedLastName, validatedEmail, dateOfBirth, phone || null, address || null, status, resolvedGroupId];
+    const params = [validatedFirstName, validatedLastName, validatedEmail, dateOfBirth, phone || null, address || null, validatedStatus, resolvedGroupId];
     if (password && password.trim() !== '') {
       const passwordHash = await bcrypt.hash(password, 10);
       query += ', password_hash = ?';
@@ -644,6 +647,8 @@ router.post('/users', async (req, res) => {
     const validatedEmail = validateEmail(email);
     const validatedFirstName = validateNonEmptyString(firstName, 'Nombre');
     const validatedLastName = validateNonEmptyString(lastName, 'Apellido');
+    const validatedRole = validateEnum(role, ['admin', 'director', 'maestro'], 'Rol');
+    validateNonEmptyString(password, 'Password');
     
     const [existing] = await db.query('SELECT id FROM users WHERE username = ? OR email = ?', [validatedUsername, validatedEmail]);
     if (existing && existing.length > 0) {
@@ -653,7 +658,7 @@ router.post('/users', async (req, res) => {
     await db.query(`
       INSERT INTO users (username, first_name, last_name, email, password_hash, role, phone, is_active, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
-    `, [validatedUsername, validatedFirstName, validatedLastName, validatedEmail, passwordHash, role, phone || null, isActive !== false]);
+    `, [validatedUsername, validatedFirstName, validatedLastName, validatedEmail, passwordHash, validatedRole, phone || null, isActive !== false]);
     res.json({ success: true, message: 'Usuario creado' });
   } catch (error) {
     console.error('Error creando usuario:', error);
@@ -671,9 +676,10 @@ router.put('/users/:id', async (req, res) => {
     const validatedEmail = validateEmail(email);
     const validatedFirstName = validateNonEmptyString(firstName, 'Nombre');
     const validatedLastName = validateNonEmptyString(lastName, 'Apellido');
+    const validatedRole = validateEnum(role, ['admin', 'director', 'maestro'], 'Rol');
     
     let query = 'UPDATE users SET username = ?, first_name = ?, last_name = ?, email = ?, role = ?, phone = ?, is_active = ?';
-    const params = [validatedUsername, validatedFirstName, validatedLastName, validatedEmail, role, phone || null, isActive !== false];
+    const params = [validatedUsername, validatedFirstName, validatedLastName, validatedEmail, validatedRole, phone || null, isActive !== false];
     if (password && password.trim() !== '') {
       const passwordHash = await bcrypt.hash(password, 10);
       query += ', password_hash = ?';

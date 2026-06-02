@@ -3,6 +3,14 @@ import db from '../config/database.js';
 import { validateId, validateMatricula, safeNumber, safeDivision, safeAverage } from '../utils/validation.js';
 
 const router = express.Router();
+function allowRoles(req, res, roles) {
+  if (!req.user || !roles.includes(req.user.role)) {
+    res.status(403).json({ error: 'Acceso no autorizado' });
+    return false;
+  }
+  return true;
+}
+
 const EXAMEN_FINAL_PARTIAL_ID = 4;
 const CALIFICACION_FINAL_PARTIAL_ID = 5;
 const SPECIAL_PARTIALS_AVG_NAME = 'Promedio de Parciales';
@@ -10,6 +18,7 @@ const SPECIAL_EXAMEN_FINAL_NAME = 'Calificación Examen Final';
 
 router.get('/teacher/subjects', async (req, res) => {
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'maestro'])) return;
     const { teacherId, semester } = req.query;
     if (!teacherId) return res.status(400).json({ error: 'Teacher ID requerido' });
     const validatedTeacherId = validateId(teacherId, 'Teacher ID');
@@ -36,6 +45,7 @@ router.get('/teacher/subjects', async (req, res) => {
 
 router.get('/subject/groups', async (req, res) => {
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'maestro'])) return;
     const { teacherId, semester, subjectCode } = req.query;
     if (!teacherId || !semester || !subjectCode) {
       return res.status(400).json({ error: 'Parámetros incompletos' });
@@ -61,6 +71,7 @@ router.get('/subject/groups', async (req, res) => {
 
 router.get('/student-subjects', async (req, res) => {
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'alumno'])) return;
     const { matricula } = req.query;
     if (!matricula) return res.status(400).json({ error: 'Matrícula requerida' });
     const validatedMatricula = validateMatricula(matricula);
@@ -80,6 +91,7 @@ router.get('/student-subjects', async (req, res) => {
 
 router.get('/student-grades', async (req, res) => {
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'alumno'])) return;
     const { matricula, parcialId, subjectCode } = req.query;
     if (!matricula || !parcialId || !subjectCode) return res.status(400).json({ error: 'Parámetros incompletos' });
     
@@ -136,6 +148,7 @@ router.get('/student-grades', async (req, res) => {
 
 router.get('/student-final', async (req, res) => {
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'alumno'])) return;
     const { matricula, subjectCode } = req.query;
     if (!matricula || !subjectCode) return res.status(400).json({ error: 'Parámetros incompletos' });
     const parcialId = CALIFICACION_FINAL_PARTIAL_ID;

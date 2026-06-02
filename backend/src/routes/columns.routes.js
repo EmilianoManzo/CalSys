@@ -234,6 +234,7 @@ router.post('/save-custom', async (req, res) => {
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
         AND (group_code = ? OR group_code IS NULL)
     `, [validatedTeacherId, semester, subject, group]);
+    const allowedColumnIds = new Set((columns || []).map((col) => String(col.id)));
 
     // Agrupar valores personalizados por estudiante
     const valoresPorEstudiante = {};
@@ -316,6 +317,7 @@ router.post('/save-custom', async (req, res) => {
       // Guardar valores personalizados
       const valores = valoresPorEstudiante[matricula] || {};
       for (const [colId, valor] of Object.entries(valores)) {
+        if (!allowedColumnIds.has(String(colId))) continue;
         await connection.query(`
           INSERT INTO grade_custom_values (grade_id, column_config_id, value)
           VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)

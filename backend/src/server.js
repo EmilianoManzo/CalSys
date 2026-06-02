@@ -8,14 +8,34 @@ import columnsRoutes from './routes/columns.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import partialsRoutes from './routes/partials.routes.js';
 import attendanceRoutes from './routes/attendance.routes.js';
+import {
+  authenticateToken,
+  enforceScopedAccess,
+  genericError,
+  requireRoles,
+  sanitizeRequest,
+  verifyCsrf,
+  verifyOrigin
+} from './middleware/security.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
-app.use(express.json());
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || corsOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Origen no permitido'));
+  },
+  credentials: true
+}));
+app.use(express.json({ limit: '100kb' }));
+app.use(sanitizeRequest);
 
 app.get('/', (req, res) => {
   res.json({ message: '🎓 Calsys API', version: '1.0.0', status: 'running' });
@@ -26,24 +46,27 @@ app.get('/api/health', async (req, res) => {
     await db.query('SELECT 1');
     res.json({ status: 'OK', database: 'connected' });
   } catch (error) {
-    res.status(500).json({ status: 'ERROR', database: 'disconnected', error: error.message });
+    console.error('Health check failed:', error);
+    res.status(500).json({ status: 'ERROR', database: 'disconnected' });
   }
 });
 
 app.use('/api/auth', authRoutes);
-app.use('/api/grades', gradesRoutes);
-app.use('/api/columns', columnsRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/partials', partialsRoutes);
-app.use('/api/attendance', attendanceRoutes);
+
+const protectedRoute = [authenticateToken, verifyOrigin, verifyCsrf, enforceScopedAccess];
+app.use('/api/grades', protectedRoute, gradesRoutes);
+app.use('/api/columns', protectedRoute, requireRoles('admin', 'director', 'maestro'), columnsRoutes);
+app.use('/api/admin', protectedRoute, requireRoles('admin'), adminRoutes);
+app.use('/api/partials', protectedRoute, requireRoles('admin', 'director', 'maestro'), partialsRoutes);
+app.use('/api/attendance', protectedRoute, attendanceRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada' });
 });
 
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Error interno del servidor' });
+  console.error('Unhandled request error:', err);
+  res.status(500).json(genericError('Error interno del servidor'));
 });
 
 app.listen(PORT, () => {

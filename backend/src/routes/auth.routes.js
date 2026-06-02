@@ -1,25 +1,11 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import db from '../config/database.js';
+import { authenticateToken, createCsrfToken, signAuthToken } from '../middleware/security.js';
+import { validateEnum, validateNonEmptyString } from '../utils/validation.js';
 
 const router = express.Router();
 
-// Middleware para verificar token (para el endpoint /me)
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-  const token = authHeader.split(' ')[1];
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-};
-
-// Login unificado (recibe username, password, role)
 router.post('/login', async (req, res) => {
   try {
     const { username, password, role } = req.body;
@@ -27,24 +13,24 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Faltan datos (username, password, role)' });
     }
 
-    let user = null;
-    let userRole = role;
+    const validatedUsername = validateNonEmptyString(username, 'Usuario');
+    const validatedRole = validateEnum(role, ['admin', 'director', 'maestro', 'alumno'], 'Rol');
 
-    if (role === 'alumno') {
-      // Buscar en tabla students
+    let user = null;
+    let userRole = validatedRole;
+
+    if (validatedRole === 'alumno') {
       const [rows] = await db.query(
         'SELECT matricula as id, matricula as username, first_name, last_name, email, password_hash, status FROM students WHERE matricula = ?',
-        [username]
+        [validatedUsername]
       );
       if (rows.length > 0 && rows[0].status === 'active') {
         user = rows[0];
-        userRole = 'alumno';
       }
     } else {
-      // Buscar en users (admin, director, maestro)
       const [rows] = await db.query(
         'SELECT id, username, first_name, last_name, email, password_hash, role, is_active FROM users WHERE username = ? AND role = ?',
-        [username, role]
+        [validatedUsername, validatedRole]
       );
       if (rows.length > 0 && rows[0].is_active === 1) {
         user = rows[0];
@@ -53,30 +39,24 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
+      return res.status(401).json({ error: 'Credenciales invalidas' });
     }
 
-    const isValid = await bcrypt.compare(password, user.password_hash);
+    const isValid = await bcrypt.compare(String(password), user.password_hash);
     if (!isValid) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
+      return res.status(401).json({ error: 'Credenciales invalidas' });
     }
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        username: user.username,
-        role: userRole,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        email: user.email,
-        matricula: role === 'alumno' ? user.id : undefined
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
-    );
+    const csrfToken = createCsrfToken();
+    const token = signAuthToken({
+      ...user,
+      role: userRole,
+      matricula: validatedRole === 'alumno' ? user.id : undefined
+    }, csrfToken);
 
     res.json({
       token,
+      csrfToken,
       user: {
         id: user.id,
         username: user.username,
@@ -84,7 +64,7 @@ router.post('/login', async (req, res) => {
         firstName: user.first_name,
         lastName: user.last_name,
         email: user.email,
-        matricula: role === 'alumno' ? user.id : undefined
+        matricula: validatedRole === 'alumno' ? user.id : undefined
       }
     });
   } catch (error) {
@@ -93,12 +73,11 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Endpoint para obtener información del usuario autenticado (desde el token)
-router.get('/me', verifyToken, async (req, res) => {
+router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = req.user;
+    const { csrfToken, iat, exp, iss, aud, ...user } = req.user;
     res.json({ user });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Error al obtener usuario' });
   }
 });

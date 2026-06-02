@@ -4,10 +4,18 @@ import { validateId, validateMatricula, safeNumber, safeDivision } from '../util
 import { getEnrolledStudents } from '../utils/enrolledStudents.js';
 
 const router = express.Router();
+function allowRoles(req, res, roles) {
+  if (!req.user || !roles.includes(req.user.role)) {
+    res.status(403).json({ error: 'Acceso no autorizado' });
+    return false;
+  }
+  return true;
+}
 
 // GET /dates
 router.get('/dates', async (req, res) => {
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'maestro'])) return;
     let { teacherId, semester, subject, group } = req.query;
     if (!teacherId || !semester || !subject) return res.status(400).json({ error: 'Faltan parámetros' });
     const validatedTeacherId = validateId(teacherId, 'Teacher ID');
@@ -33,6 +41,7 @@ router.get('/dates', async (req, res) => {
 // POST /dates
 router.post('/dates', async (req, res) => {
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'maestro'])) return;
     let { teacherId, semester, subject, group, date } = req.body;
     if (!teacherId || !semester || !subject || !date) return res.status(400).json({ error: 'Faltan parámetros' });
     const validatedTeacherId = validateId(teacherId, 'Teacher ID');
@@ -56,6 +65,7 @@ router.post('/dates', async (req, res) => {
 // DELETE /dates/:id
 router.delete('/dates/:id', async (req, res) => {
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'maestro'])) return;
     const validatedId = validateId(req.params.id, 'ID de fecha');
     await db.query(`DELETE FROM attendance_dates WHERE id = ?`, [validatedId]);
     res.json({ success: true });
@@ -68,6 +78,7 @@ router.delete('/dates/:id', async (req, res) => {
 // GET /records
 router.get('/records', async (req, res) => {
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'maestro'])) return;
     let { teacherId, semester, subject, group } = req.query;
     if (!teacherId || !semester || !subject) return res.status(400).json({ error: 'Faltan parámetros' });
     const validatedTeacherId = validateId(teacherId, 'Teacher ID');
@@ -129,6 +140,10 @@ router.get('/records', async (req, res) => {
 router.post('/records', async (req, res) => {
   const connection = await db.getConnection();
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'maestro'])) {
+      connection.release();
+      return;
+    }
     const { updates } = req.body; // updates: [{ matricula, dateId, isPresent }]
     if (!updates || !Array.isArray(updates)) {
       connection.release();
@@ -161,6 +176,7 @@ router.post('/records', async (req, res) => {
 // GET /student
 router.get('/student', async (req, res) => {
   try {
+    if (!allowRoles(req, res, ['admin', 'director', 'alumno'])) return;
     const { matricula, subjectCode } = req.query;
     if (!matricula || !subjectCode) return res.status(400).json({ error: 'Parámetros incompletos' });
     const validatedMatricula = validateMatricula(matricula);

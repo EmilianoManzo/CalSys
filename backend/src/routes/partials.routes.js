@@ -506,6 +506,10 @@ router.post('/save-grades', async (req, res) => {
     const validatedTeacherId = validateId(teacherId, 'Teacher ID');
     const validatedPartialId = validateId(partialId, 'Partial ID');
     const groupValue = (group === '' ? null : group);
+    if (!Array.isArray(values)) {
+      connection.release();
+      return res.status(400).json({ error: 'values debe ser un arreglo' });
+    }
     
     await connection.beginTransaction();
     let specialColumnNames = new Set();
@@ -526,10 +530,11 @@ router.post('/save-grades', async (req, res) => {
     for (const val of values) {
       const { matricula, columnName, value } = val;
       if (!columnName) continue;
+      const validatedMatricula = validateMatricula(String(matricula || ''));
       if (validatedPartialId === CALIFICACION_FINAL_PARTIAL_ID && specialColumnNames.has(columnName)) continue;
       if (columnName === '📊 Promedio Parcial' || columnName === '🎯 CALIFICACIÓN FINAL GLOBAL') continue;
       const safeValue = safeNumber(value);
-      const insertParams = [matricula, validatedTeacherId, semester, subject, groupValue, validatedPartialId, columnName, safeValue];
+      const insertParams = [validatedMatricula, validatedTeacherId, semester, subject, groupValue, validatedPartialId, columnName, safeValue];
       await connection.query(`
         INSERT INTO partial_grades (student_matricula, teacher_id, semester_code, subject_code, group_code, partial_id, column_name, value)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
