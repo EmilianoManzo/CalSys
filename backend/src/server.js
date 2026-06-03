@@ -31,8 +31,14 @@ const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+console.log('=== CORS DEBUG ===');
+console.log('CORS_ORIGIN env:', JSON.stringify(process.env.CORS_ORIGIN));
+console.log('corsOrigins array:', JSON.stringify(corsOrigins));
+console.log('==================');
+
 app.use(cors({
   origin(origin, callback) {
+    console.log('Request origin:', JSON.stringify(origin));
     if (!origin || corsOrigins.includes(origin)) return callback(null, true);
     return callback(new Error('Origen no permitido'));
   },
