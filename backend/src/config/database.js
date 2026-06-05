@@ -9,6 +9,7 @@ const pool = mysql.createPool({
   password:         process.env.DB_PASSWORD || '',
   database:         process.env.DB_NAME     || 'calsys_db',
   port:             process.env.DB_PORT     || 3306,
+  charset:          'utf8mb4',
   connectTimeout:   Number(process.env.DB_CONNECT_TIMEOUT_MS || 10000),
   ssl:              { rejectUnauthorized: false },
   waitForConnections: true,

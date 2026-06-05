@@ -49,6 +49,10 @@ app.use(requireJsonBody);
 app.use(express.json({ limit: '100kb' }));
 app.use(sanitizeRequest);
 app.use(globalRateLimiter);
+app.use((req, res, next) => {
+  res.charset = 'utf-8';
+  next();
+});
 
 app.get('/', (req, res) => {
   res.json({ message: '🎓 Calsys API', version: '1.0.0', status: 'running' });
