@@ -11,13 +11,42 @@ const SPECIAL_PARTIALS_AVG_NAME = 'Promedio de Parciales';
 const SPECIAL_EXAMEN_FINAL_NAME = 'Calificación Examen Final';
 const FINAL_SPECIAL_COLUMN_NAMES = new Set([SPECIAL_PARTIALS_AVG_NAME, SPECIAL_EXAMEN_FINAL_NAME]);
 
-function dedupeColumnsByName(columns = []) {
+function canonicalFinalSpecialName(name = '') {
+  const raw = String(name).toLowerCase();
+  const normalized = raw
+    .replace(/ã¡|á/g, 'a')
+    .replace(/ã©|é/g, 'e')
+    .replace(/ã­|í/g, 'i')
+    .replace(/ã³|ó/g, 'o')
+    .replace(/ãº|ú/g, 'u')
+    .replace(/ã±|ñ/g, 'n')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  if (normalized.includes('promedio') && normalized.includes('parciales')) {
+    return SPECIAL_PARTIALS_AVG_NAME;
+  }
+  if (normalized.includes('calificaci') && normalized.includes('examen') && normalized.includes('final')) {
+    return SPECIAL_EXAMEN_FINAL_NAME;
+  }
+  return null;
+}
+
+function dedupeColumnsByName(columns = [], { normalizeFinalSpecials = false } = {}) {
   const seen = new Set();
   return columns.filter(col => {
-    if (!col || !col.column_name || seen.has(col.column_name)) return false;
-    seen.add(col.column_name);
+    if (!col || !col.column_name) return false;
+    const canonicalName = normalizeFinalSpecials ? canonicalFinalSpecialName(col.column_name) : null;
+    const key = canonicalName || col.column_name;
+    if (seen.has(key)) return false;
+    if (canonicalName) col.column_name = canonicalName;
+    seen.add(key);
     return true;
   });
+}
+
+function isFinalSpecialColumnName(name) {
+  return FINAL_SPECIAL_COLUMN_NAMES.has(name) || canonicalFinalSpecialName(name) !== null;
 }
 
 // ============================================
@@ -187,7 +216,7 @@ router.get('/config', async (req, res) => {
     else query += ` AND group_code IS NULL`;
     query += ` ORDER BY display_order`;
     let [columns] = await db.query(query, params);
-    columns = dedupeColumnsByName(columns || []);
+    columns = dedupeColumnsByName(columns || [], { normalizeFinalSpecials: validatedPartialId === CALIFICACION_FINAL_PARTIAL_ID });
 
     if (validatedPartialId === CALIFICACION_FINAL_PARTIAL_ID) {
       await ensureFinalSpecialColumns(db, validatedTeacherId, semester, subject, group);
@@ -201,8 +230,8 @@ router.get('/config', async (req, res) => {
       else specialQuery += ` AND group_code IS NULL`;
       specialQuery += ` ORDER BY display_order`;
       const [special] = await db.query(specialQuery, specialParams);
-      const specialColumns = dedupeColumnsByName(special || []);
-      const normalColumns = columns.filter(col => !FINAL_SPECIAL_COLUMN_NAMES.has(col.column_name));
+      const specialColumns = dedupeColumnsByName(special || [], { normalizeFinalSpecials: true });
+      const normalColumns = columns.filter(col => !isFinalSpecialColumnName(col.column_name));
       columns = [...specialColumns, ...normalColumns];
     }
     res.json({ columns: columns || [] });
@@ -239,7 +268,7 @@ router.post('/config', async (req, res) => {
     let order = 0;
     for (const col of columns) {
       if (col.is_special) continue;
-      if (validatedPartialId === CALIFICACION_FINAL_PARTIAL_ID && FINAL_SPECIAL_COLUMN_NAMES.has(col.name)) continue;
+      if (validatedPartialId === CALIFICACION_FINAL_PARTIAL_ID && isFinalSpecialColumnName(col.name)) continue;
       const weight = safeNumber(col.weight, 0);
       const maxValue = safeNumber(col.maxValue, 10);
       await connection.query(`
@@ -308,7 +337,7 @@ router.get('/grades', async (req, res) => {
     else columnsQuery += ` AND group_code IS NULL`;
     columnsQuery += ` ORDER BY display_order`;
     let [realColumns] = await db.query(columnsQuery, columnsParams);
-    realColumns = dedupeColumnsByName(realColumns);
+    realColumns = dedupeColumnsByName(realColumns, { normalizeFinalSpecials: validatedPartialId === CALIFICACION_FINAL_PARTIAL_ID });
     let columns = [...realColumns];
 
     // Agregar columnas virtuales
@@ -336,8 +365,8 @@ router.get('/grades', async (req, res) => {
       else specialQuery += ` AND group_code IS NULL`;
       let [special] = await db.query(specialQuery, specialParams);
 
-      const specialCols = dedupeColumnsByName(special || []).sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
-      realColumns = realColumns.filter(col => !FINAL_SPECIAL_COLUMN_NAMES.has(col.column_name));
+      const specialCols = dedupeColumnsByName(special || [], { normalizeFinalSpecials: true }).sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+      realColumns = realColumns.filter(col => !isFinalSpecialColumnName(col.column_name));
       const finalGlobalCol = {
         id: -3,
         column_name: '🎯 CALIFICACIÓN FINAL GLOBAL',
