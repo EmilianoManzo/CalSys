@@ -9,6 +9,16 @@ const EXAMEN_FINAL_PARTIAL_ID = 4;
 const CALIFICACION_FINAL_PARTIAL_ID = 5;
 const SPECIAL_PARTIALS_AVG_NAME = 'Promedio de Parciales';
 const SPECIAL_EXAMEN_FINAL_NAME = 'Calificación Examen Final';
+const FINAL_SPECIAL_COLUMN_NAMES = new Set([SPECIAL_PARTIALS_AVG_NAME, SPECIAL_EXAMEN_FINAL_NAME]);
+
+function dedupeColumnsByName(columns = []) {
+  const seen = new Set();
+  return columns.filter(col => {
+    if (!col || !col.column_name || seen.has(col.column_name)) return false;
+    seen.add(col.column_name);
+    return true;
+  });
+}
 
 // ============================================
 // FUNCIONES AUXILIARES
@@ -142,6 +152,12 @@ async function ensureFinalSpecialColumns(connectionOrDb, teacherId, semester, su
         (teacher_id, semester_code, subject_code, group_code, partial_id, column_name, weight, max_value, display_order, is_special)
         VALUES (?, ?, ?, ?, ?, ?, 0, 10, ?, 1)
       `, [teacherId, semester, subject, group ?? null, CALIFICACION_FINAL_PARTIAL_ID, special.name, special.order]);
+    } else if (rows.length > 1) {
+      const duplicateIds = rows.slice(1).map(row => row.id);
+      await connectionOrDb.query(`
+        DELETE FROM partial_columns_config
+        WHERE id IN (${duplicateIds.map(() => '?').join(',')})
+      `, duplicateIds);
     }
   }
 }
@@ -171,6 +187,7 @@ router.get('/config', async (req, res) => {
     else query += ` AND group_code IS NULL`;
     query += ` ORDER BY display_order`;
     let [columns] = await db.query(query, params);
+    columns = dedupeColumnsByName(columns || []);
 
     if (validatedPartialId === CALIFICACION_FINAL_PARTIAL_ID) {
       await ensureFinalSpecialColumns(db, validatedTeacherId, semester, subject, group);
@@ -184,7 +201,9 @@ router.get('/config', async (req, res) => {
       else specialQuery += ` AND group_code IS NULL`;
       specialQuery += ` ORDER BY display_order`;
       const [special] = await db.query(specialQuery, specialParams);
-      columns = [...(special || []), ...(columns || [])];
+      const specialColumns = dedupeColumnsByName(special || []);
+      const normalColumns = columns.filter(col => !FINAL_SPECIAL_COLUMN_NAMES.has(col.column_name));
+      columns = [...specialColumns, ...normalColumns];
     }
     res.json({ columns: columns || [] });
   } catch (error) {
@@ -220,6 +239,7 @@ router.post('/config', async (req, res) => {
     let order = 0;
     for (const col of columns) {
       if (col.is_special) continue;
+      if (validatedPartialId === CALIFICACION_FINAL_PARTIAL_ID && FINAL_SPECIAL_COLUMN_NAMES.has(col.name)) continue;
       const weight = safeNumber(col.weight, 0);
       const maxValue = safeNumber(col.maxValue, 10);
       await connection.query(`
@@ -282,12 +302,13 @@ router.get('/grades', async (req, res) => {
       SELECT * FROM partial_columns_config
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
         AND partial_id = ? AND is_special = 0
-      ORDER BY display_order
     `;
     const columnsParams = [validatedTeacherId, semester, subject, validatedPartialId];
     if (group !== null) { columnsQuery += ` AND group_code = ?`; columnsParams.push(group); }
     else columnsQuery += ` AND group_code IS NULL`;
+    columnsQuery += ` ORDER BY display_order`;
     let [realColumns] = await db.query(columnsQuery, columnsParams);
+    realColumns = dedupeColumnsByName(realColumns);
     let columns = [...realColumns];
 
     // Agregar columnas virtuales
@@ -315,7 +336,8 @@ router.get('/grades', async (req, res) => {
       else specialQuery += ` AND group_code IS NULL`;
       let [special] = await db.query(specialQuery, specialParams);
 
-      const specialCols = (special || []).sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+      const specialCols = dedupeColumnsByName(special || []).sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+      realColumns = realColumns.filter(col => !FINAL_SPECIAL_COLUMN_NAMES.has(col.column_name));
       const finalGlobalCol = {
         id: -3,
         column_name: '🎯 CALIFICACIÓN FINAL GLOBAL',
