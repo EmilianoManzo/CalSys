@@ -35,20 +35,15 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
       let cols = res.data.columns || [];
       if (!Array.isArray(cols)) cols = [];
       const valid = cols.filter(c => c && typeof c === 'object');
-      if (valid.length === 0 && !showConfig) {
-        setShowConfig(true);
-        setLoading(false);
-        return;
-      }
       setColumns(valid);
-      await loadGrades(valid);
+      await loadGrades();
     } catch (error) {
       console.error(error);
       setLoading(false);
     }
   };
 
-  const loadGrades = async (cols) => {
+  const loadGrades = async () => {
     try {
       const params = { teacherId, semester, subject, partialId };
       if (group && group !== '') params.group = group;

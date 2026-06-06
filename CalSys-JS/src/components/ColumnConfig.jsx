@@ -58,10 +58,6 @@ function ColumnConfig({ columns, onSave, onCancel, showSpecialColumn = true }) {
       alert('No se puede eliminar una columna especial');
       return;
     }
-    if (localColumns.filter(c => !c.is_special).length === 1) {
-      alert('Debe haber al menos una columna adicional');
-      return;
-    }
     setLocalColumns(localColumns.filter((_, i) => i !== idx));
   };
 

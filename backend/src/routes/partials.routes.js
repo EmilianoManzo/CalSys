@@ -105,7 +105,7 @@ async function ensureColumnsConfig(teacherId, semester, subject, group, partialI
   }
 }
 
-async function recalcPartialAverages(teacherId, semester, subject, group, partialId) {
+async function recalcPartialAverages(teacherId, semester, subject, group, partialId, connectionOrDb = db) {
   const validatedPartialId = validateId(partialId, 'Partial ID');
   if (validatedPartialId === CALIFICACION_FINAL_PARTIAL_ID) return;
   
@@ -118,7 +118,7 @@ async function recalcPartialAverages(teacherId, semester, subject, group, partia
   const deleteParams = [teacherId, semester, subject, validatedPartialId];
   if (group && group !== '') { deleteQuery += ` AND group_code = ?`; deleteParams.push(group); }
   else deleteQuery += ` AND group_code IS NULL`;
-  await db.query(deleteQuery, deleteParams);
+  await connectionOrDb.query(deleteQuery, deleteParams);
 
   let insertQuery = `
     INSERT INTO partial_grades (student_matricula, teacher_id, semester_code, subject_code, group_code, partial_id, column_name, value)
@@ -153,7 +153,7 @@ async function recalcPartialAverages(teacherId, semester, subject, group, partia
     insertQuery += ` AND g.group_code IS NULL`;
   }
   insertQuery += ` GROUP BY g.student_matricula, g.teacher_id, g.semester_code, g.subject_code, g.group_code, g.partial_id`;
-  await db.query(insertQuery, insertParams);
+  await connectionOrDb.query(insertQuery, insertParams);
 }
 
 async function ensureFinalSpecialColumns(connectionOrDb, teacherId, semester, subject, group) {
@@ -255,6 +255,40 @@ router.post('/config', async (req, res) => {
     
     await connection.beginTransaction();
 
+    let existingQuery = `
+      SELECT column_name
+      FROM partial_columns_config
+      WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
+        AND partial_id = ? AND is_special = 0
+    `;
+    const existingParams = [validatedTeacherId, semester, subject, validatedPartialId];
+    if (groupValue !== null) { existingQuery += ` AND group_code = ?`; existingParams.push(groupValue); }
+    else existingQuery += ` AND group_code IS NULL`;
+    const [existingColumns] = await connection.query(existingQuery, existingParams);
+
+    const nextColumnNames = new Set(
+      columns
+        .filter(col => !col.is_special)
+        .map(col => String(col.name || '').trim())
+        .filter(name => name && !(validatedPartialId === CALIFICACION_FINAL_PARTIAL_ID && isFinalSpecialColumnName(name)))
+    );
+    const removedColumnNames = (existingColumns || [])
+      .map(col => col.column_name)
+      .filter(name => !nextColumnNames.has(name));
+
+    if (removedColumnNames.length > 0) {
+      let deleteGradesQuery = `
+        DELETE FROM partial_grades
+        WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
+          AND partial_id = ?
+          AND column_name IN (${removedColumnNames.map(() => '?').join(',')})
+      `;
+      const deleteGradesParams = [validatedTeacherId, semester, subject, validatedPartialId, ...removedColumnNames];
+      if (groupValue !== null) { deleteGradesQuery += ` AND group_code = ?`; deleteGradesParams.push(groupValue); }
+      else deleteGradesQuery += ` AND group_code IS NULL`;
+      await connection.query(deleteGradesQuery, deleteGradesParams);
+    }
+
     let deleteQuery = `
       DELETE FROM partial_columns_config
       WHERE teacher_id = ? AND semester_code = ? AND subject_code = ?
@@ -298,6 +332,10 @@ router.post('/config', async (req, res) => {
         else updateQuery += ` AND group_code IS NULL`;
         await connection.query(updateQuery, updateParams);
       }
+    }
+
+    if (validatedPartialId !== CALIFICACION_FINAL_PARTIAL_ID) {
+      await recalcPartialAverages(validatedTeacherId, semester, subject, groupValue, validatedPartialId, connection);
     }
 
     await connection.commit();
