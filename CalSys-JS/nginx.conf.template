@@ -3,6 +3,13 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Serve the runtime config without caching so a restarted container
+    # always delivers the freshly-generated file to the browser.
+    location = /config.js {
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+        try_files $uri =404;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
