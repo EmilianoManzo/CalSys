@@ -15,9 +15,16 @@ FROM nginx:stable-alpine
 # Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# nginx config for SPA routing (all paths fall back to index.html)
-RUN printf 'server {\n    listen 80;\n    root /usr/share/nginx/html;\n    index index.html;\n\n    location / {\n        try_files $uri $uri/ /index.html;\n    }\n}\n' > /etc/nginx/conf.d/default.conf
+# Copy nginx config template (PORT is substituted at runtime via envsubst)
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
-EXPOSE 80
+# envsubst is provided by the gettext package (pre-installed in nginx:stable-alpine)
+# The official nginx image automatically processes /etc/nginx/templates/*.template
+# files via envsubst and writes the results to /etc/nginx/conf.d/ on startup.
+
+# Default to port 3000 to match Railway's expected PORT value
+ENV PORT=3000
+
+EXPOSE ${PORT}
 
 CMD ["nginx", "-g", "daemon off;"]
