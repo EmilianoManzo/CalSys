@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.RAILWAY_API_URL || 'https://calsys-backend-production.up.railway.app';
+const baseURL = import.meta.env.RAILWAY_API_URL || 'https://calsys-backend-production.up.railway.app/api';
 
 const api = axios.create({
   baseURL,
