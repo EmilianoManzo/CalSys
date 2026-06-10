@@ -1,0 +1,3 @@
+window.__env__ = {
+  REACT_APP_API_URL: 'REACT_APP_API_URL_PLACEHOLDER',
+};
