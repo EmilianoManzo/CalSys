@@ -1,7 +1,15 @@
 import axios from 'axios';
 
+const baseURL =
+  (window.__env__ && window.__env__.REACT_APP_API_URL &&
+    window.__env__.REACT_APP_API_URL !== 'REACT_APP_API_URL_PLACEHOLDER'
+    ? window.__env__.REACT_APP_API_URL
+    : null) ||
+  import.meta.env.VITE_API_URL ||
+  'http://localhost:3000/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+  baseURL,
 });
 
 api.interceptors.request.use((config) => {
