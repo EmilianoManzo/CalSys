@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const baseURL = import.meta.env.RAILWAY_API_URL || 'https://calsys-backend-production.up.railway.app';
 
 const api = axios.create({
   baseURL,
