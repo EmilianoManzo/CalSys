@@ -159,11 +159,39 @@ export function requireRoles(...roles) {
   };
 }
 
-function configuredOrigins() {
-  return (process.env.CORS_ORIGIN || 'http://localhost:5173')
+export function configuredOrigins() {
+  const corsOrigin = process.env.CORS_ORIGIN;
+
+  // Enforce CORS_ORIGIN in production
+  if (!corsOrigin) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('CORS_ORIGIN environment variable must be set in production');
+    }
+    // Development fallback only
+    return ['http://localhost:5173'];
+  }
+
+  // Parse and validate origins
+  const origins = corsOrigin
     .split(',')
     .map((origin) => origin.trim())
+    .filter(Boolean)
+    .map((origin) => {
+      try {
+        new URL(origin);
+        return origin;
+      } catch {
+        console.warn(`⚠️ Invalid CORS origin URL: "${origin}" - skipping`);
+        return null;
+      }
+    })
     .filter(Boolean);
+
+  if (origins.length === 0) {
+    throw new Error('No valid CORS origins configured in CORS_ORIGIN');
+  }
+
+  return origins;
 }
 
 export function verifyOrigin(req, res, next) {

@@ -10,6 +10,7 @@ import partialsRoutes from './routes/partials.routes.js';
 import attendanceRoutes from './routes/attendance.routes.js';
 import {
   authenticateToken,
+  configuredOrigins,
   enforceScopedAccess,
   genericError,
   requireRoles,
@@ -26,19 +27,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
-const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-console.log('=== CORS DEBUG ===');
-console.log('CORS_ORIGIN env:', JSON.stringify(process.env.CORS_ORIGIN));
-console.log('corsOrigins array:', JSON.stringify(corsOrigins));
-console.log('==================');
+const corsOrigins = configuredOrigins();
 
 app.use(cors({
   origin(origin, callback) {
-    console.log('Request origin:', JSON.stringify(origin));
     if (!origin || corsOrigins.includes(origin)) return callback(null, true);
     return callback(new Error('Origen no permitido'));
   },
