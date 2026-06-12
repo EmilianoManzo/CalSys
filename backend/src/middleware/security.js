@@ -217,8 +217,12 @@ export function verifyOrigin(req, res, next) {
 export function verifyCsrf(req, res, next) {
   if (SAFE_METHODS.has(req.method)) return next();
   const csrfHeader = req.headers['x-csrf-token'];
-  if (!req.user?.csrfToken || csrfHeader !== req.user.csrfToken) {
-    logSecurityEvent(req, 'csrf_denied');
+  if (!req.user?.csrfToken) {
+    logSecurityEvent(req, 'csrf_denied', { reason: 'no_csrf_in_token' });
+    return res.status(403).json({ error: 'Token CSRF invalido' });
+  }
+  if (csrfHeader !== req.user.csrfToken) {
+    logSecurityEvent(req, 'csrf_denied', { reason: 'csrf_mismatch', headerPresent: !!csrfHeader });
     return res.status(403).json({ error: 'Token CSRF invalido' });
   }
   next();
