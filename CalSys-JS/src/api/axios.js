@@ -4,6 +4,9 @@ const baseURL = import.meta.env.RAILWAY_API_URL || 'https://calsys-backend-produ
 
 const api = axios.create({
   baseURL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
 api.interceptors.request.use((config) => {
