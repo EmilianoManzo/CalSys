@@ -568,7 +568,7 @@ router.get('/students', async (req, res) => {
 
 router.post('/students', async (req, res) => {
   try {
-    const { matricula, firstName, lastName, email, password, dateOfBirth, phone, address, status, groupId } = req.body;
+    const { matricula, firstName, lastName, email, password, phone, address, status, groupId } = req.body;
     const validatedMatricula = validateMatricula(matricula);
     const validatedEmail = validateEmail(email);
     const validatedFirstName = validateNonEmptyString(firstName, 'Nombre');
@@ -583,9 +583,9 @@ router.post('/students', async (req, res) => {
     }
     const passwordHash = await bcrypt.hash(password, 10);
     await db.query(`
-      INSERT INTO students (matricula, first_name, last_name, email, password_hash, date_of_birth, phone, address, status, admission_date, group_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)
-    `, [validatedMatricula, validatedFirstName, validatedLastName, validatedEmail, passwordHash, dateOfBirth, phone || null, address || null, validatedStatus, resolvedGroupId]);
+      INSERT INTO students (matricula, first_name, last_name, email, password_hash, phone, address, status, admission_date, group_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)
+    `, [validatedMatricula, validatedFirstName, validatedLastName, validatedEmail, passwordHash, phone || null, address || null, validatedStatus, resolvedGroupId]);
     invalidateCache('admin:student-groups');
     res.json({ success: true, message: 'Estudiante creado exitosamente' });
   } catch (error) {
