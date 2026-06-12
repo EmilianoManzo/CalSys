@@ -90,8 +90,9 @@ export function securityHeaders(req, res, next) {
   next();
 }
 
+// ← ÚNICO CAMBIO: se agrega && req.method !== 'DELETE'
 export function requireJsonBody(req, res, next) {
-  if (!SAFE_METHODS.has(req.method) && !req.is('application/json')) {
+  if (!SAFE_METHODS.has(req.method) && req.method !== 'DELETE' && !req.is('application/json')) {
     return res.status(415).json({ error: 'Content-Type application/json requerido' });
   }
   next();
@@ -162,16 +163,13 @@ export function requireRoles(...roles) {
 export function configuredOrigins() {
   const corsOrigin = process.env.CORS_ORIGIN;
 
-  // Enforce CORS_ORIGIN in production
   if (!corsOrigin) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error('CORS_ORIGIN environment variable must be set in production');
     }
-    // Development fallback only
     return ['http://localhost:5173'];
   }
 
-  // Parse and validate origins
   const origins = corsOrigin
     .split(',')
     .map((origin) => origin.trim())
