@@ -3,6 +3,19 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+function sslConfig() {
+  if (process.env.DB_SSL_CA) {
+    return {
+      ca: process.env.DB_SSL_CA,
+      rejectUnauthorized: true
+    };
+  }
+  if (process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production') {
+    return { rejectUnauthorized: true };
+  }
+  return undefined;
+}
+
 const pool = mysql.createPool({
   host:             process.env.DB_HOST     || 'localhost',
   user:             process.env.DB_USER     || 'root',
@@ -11,7 +24,7 @@ const pool = mysql.createPool({
   port:             process.env.DB_PORT     || 3306,
   charset:          'utf8mb4',
   connectTimeout:   Number(process.env.DB_CONNECT_TIMEOUT_MS || 10000),
-  ssl:              { rejectUnauthorized: false },
+  ssl:              sslConfig(),
   waitForConnections: true,
   connectionLimit:  10,
   queueLimit:       0

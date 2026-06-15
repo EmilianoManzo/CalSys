@@ -6,6 +6,29 @@ import { clearAuthFailures, recordAuthFailure } from '../middleware/rateLimit.js
 import { validateEnum, validateNonEmptyString } from '../utils/validation.js';
 
 const router = express.Router();
+const AUTH_COOKIE_MAX_AGE_MS = 15 * 60 * 1000;
+
+function authCookieOptions(httpOnly) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly,
+    secure: isProduction,
+    sameSite: 'strict',
+    path: '/',
+    maxAge: AUTH_COOKIE_MAX_AGE_MS
+  };
+}
+
+function clearAuthCookies(res) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const options = {
+    secure: isProduction,
+    sameSite: 'strict',
+    path: '/'
+  };
+  res.clearCookie('access_token', { ...options, httpOnly: true });
+  res.clearCookie('csrf_token', { ...options, httpOnly: false });
+}
 
 router.post('/login', async (req, res) => {
   try {
@@ -61,8 +84,9 @@ router.post('/login', async (req, res) => {
       matricula: validatedRole === 'alumno' ? user.id : undefined
     }, csrfToken);
 
+    res.cookie('access_token', token, authCookieOptions(true));
+    res.cookie('csrf_token', csrfToken, authCookieOptions(false));
     res.json({
-      token,
       csrfToken,
       user: {
         id: user.id,
@@ -78,6 +102,11 @@ router.post('/login', async (req, res) => {
     console.error('Error en login:', error);
     res.status(500).json({ error: 'Error en el servidor' });
   }
+});
+
+router.post('/logout', (req, res) => {
+  clearAuthCookies(res);
+  res.json({ success: true });
 });
 
 router.get('/me', authenticateToken, async (req, res) => {

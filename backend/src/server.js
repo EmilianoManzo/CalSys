@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import db from './config/database.js';
 import authRoutes from './routes/auth.routes.js';
@@ -38,6 +39,7 @@ app.use(cors({
 }));
 app.use(securityHeaders);
 app.use(requireJsonBody);
+app.use(cookieParser());
 app.use(express.json({ limit: '100kb' }));
 app.use(sanitizeRequest);
 app.use(globalRateLimiter);
@@ -47,16 +49,20 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (req, res) => {
-  res.json({ message: '🎓 Calsys API', version: '1.0.0', status: 'running' });
+  res.status(404).json({ error: 'Ruta no encontrada' });
 });
 
-app.get('/api/health', async (req, res) => {
+app.get('/api/health', (req, res) => {
+  res.status(204).end();
+});
+
+app.get('/api/internal/health', authenticateToken, requireRoles('admin'), async (req, res) => {
   try {
     await db.query('SELECT 1');
-    res.json({ status: 'OK', database: 'connected' });
+    res.json({ status: 'OK' });
   } catch (error) {
     console.error('Health check failed:', error);
-    res.status(500).json({ status: 'ERROR', database: 'disconnected' });
+    res.status(503).json({ status: 'ERROR' });
   }
 });
 

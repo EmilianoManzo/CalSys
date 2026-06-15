@@ -11,18 +11,11 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const token = sessionStorage.getItem('token');
-      if (token) {
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        try {
-          const response = await api.get('/auth/me');
-          setUser(response.data.user);
-        } catch (error) {
-          console.error('Error al verificar token:', error);
-          sessionStorage.removeItem('token');
-          sessionStorage.removeItem('csrfToken');
-          delete api.defaults.headers.common['Authorization'];
-        }
+      try {
+        const response = await api.get('/auth/me');
+        setUser(response.data.user);
+      } catch {
+        setUser(null);
       }
       setLoading(false);
     };
@@ -32,10 +25,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password, role) => {
     try {
       const response = await api.post('/auth/login', { username, password, role });
-      const { token, csrfToken, user: userData } = response.data;
-      sessionStorage.setItem('token', token);
-      sessionStorage.setItem('csrfToken', csrfToken);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      const { user: userData } = response.data;
       setUser(userData);
       return { success: true, role: userData.role };
     } catch (error) {
@@ -44,10 +34,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('csrfToken');
-    delete api.defaults.headers.common['Authorization'];
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
     setUser(null);
   };
 

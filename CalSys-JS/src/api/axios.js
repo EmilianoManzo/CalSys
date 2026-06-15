@@ -1,22 +1,28 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.RAILWAY_API_URL || 'https://calsys-backend-production.up.railway.app/api';
+const baseURL = import.meta.env.VITE_API_URL || 'https://calsys-backend-production.up.railway.app/api';
+
+function cookieValue(name) {
+  return document.cookie
+    .split('; ')
+    .find((row) => row.startsWith(`${name}=`))
+    ?.split('=')
+    .slice(1)
+    .join('=');
+}
 
 const api = axios.create({
   baseURL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('token');
-  const csrfToken = sessionStorage.getItem('csrfToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  const csrfToken = cookieValue('csrf_token');
   if (csrfToken && !['get', 'head', 'options'].includes((config.method || 'get').toLowerCase())) {
-    config.headers['X-CSRF-Token'] = csrfToken;
+    config.headers['X-CSRF-Token'] = decodeURIComponent(csrfToken);
   }
   return config;
 });

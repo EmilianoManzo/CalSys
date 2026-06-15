@@ -113,7 +113,7 @@ export function signAuthToken(user, csrfToken) {
     getJwtSecret(),
     {
       algorithm: JWT_ALGORITHM,
-      expiresIn: process.env.JWT_EXPIRES_IN || '12h',
+      expiresIn: process.env.JWT_EXPIRES_IN || '15m',
       issuer: process.env.JWT_ISSUER || 'calsys-api',
       audience: process.env.JWT_AUDIENCE || 'calsys-web'
     }
@@ -126,8 +126,9 @@ export function createCsrfToken() {
 
 export function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization || '';
-  const [scheme, token] = authHeader.split(' ');
-  if (scheme !== 'Bearer' || !token) {
+  const [scheme, bearerToken] = authHeader.split(' ');
+  const token = req.cookies?.access_token || (scheme === 'Bearer' ? bearerToken : null);
+  if (!token) {
     logSecurityEvent(req, 'auth_missing_token');
     return res.status(401).json({ error: 'Autenticacion requerida' });
   }

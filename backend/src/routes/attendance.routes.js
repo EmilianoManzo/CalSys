@@ -13,6 +13,33 @@ function allowRoles(req, res, roles) {
   return true;
 }
 
+function normalizedGroup(group) {
+  return group && String(group).trim() !== '' ? String(group).trim() : null;
+}
+
+async function attendanceRecordAllowed(connection, req, dateId, matricula) {
+  const params = [matricula, dateId];
+  let teacherFilter = '';
+  if (req.user.role === 'maestro') {
+    teacherFilter = ' AND ad.teacher_id = ?';
+    params.push(validateId(req.user.id, 'Teacher ID'));
+  }
+
+  const [rows] = await connection.query(`
+    SELECT ad.id
+    FROM attendance_dates ad
+    INNER JOIN final_grades fg ON fg.teacher_id = ad.teacher_id
+      AND fg.semester_code = ad.semester_code
+      AND fg.subject_code = ad.subject_code
+      AND (fg.group_code <=> ad.group_code)
+      AND fg.student_matricula = ?
+    WHERE ad.id = ?${teacherFilter}
+    LIMIT 1
+  `, params);
+
+  return rows && rows.length > 0;
+}
+
 // GET /dates
 router.get('/dates', async (req, res) => {
   try {
@@ -46,7 +73,7 @@ router.post('/dates', async (req, res) => {
     let { teacherId, semester, subject, group, date } = req.body;
     if (!teacherId || !semester || !subject || !date) return res.status(400).json({ error: 'Faltan parámetros' });
     const validatedTeacherId = validateId(teacherId, 'Teacher ID');
-    const groupValue = group === '' ? null : group;
+    const groupValue = normalizedGroup(group);
 
     await db.query(`
       INSERT INTO attendance_dates (teacher_id, semester_code, subject_code, group_code, class_date)
@@ -68,7 +95,13 @@ router.delete('/dates/:id', async (req, res) => {
   try {
     if (!allowRoles(req, res, ['admin', 'director', 'maestro'])) return;
     const validatedId = validateId(req.params.id, 'ID de fecha');
-    await db.query(`DELETE FROM attendance_dates WHERE id = ?`, [validatedId]);
+    const params = [validatedId];
+    let query = 'DELETE FROM attendance_dates WHERE id = ?';
+    if (req.user.role === 'maestro') {
+      query += ' AND teacher_id = ?';
+      params.push(validateId(req.user.id, 'Teacher ID'));
+    }
+    await db.query(query, params);
     res.json({ success: true });
   } catch (error) {
     console.error('Error eliminando fecha:', error);
@@ -156,6 +189,8 @@ router.post('/records', async (req, res) => {
       if (!u.matricula || !u.dateId) continue;
       const validatedMatricula = validateMatricula(u.matricula);
       const validatedDateId = validateId(u.dateId, 'ID de fecha');
+      const allowed = await attendanceRecordAllowed(connection, req, validatedDateId, validatedMatricula);
+      if (!allowed) continue;
       const isPresent = u.isPresent ? 1 : 0;
       await connection.query(`
         INSERT INTO attendance_records (student_matricula, date_id, is_present)
