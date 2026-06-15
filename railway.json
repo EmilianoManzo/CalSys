@@ -1,9 +1,0 @@
-{
-  "build": {
-    "builder": "nixpacks",
-    "watchPatterns": ["CalSys-JS/**/*"]
-  },
-  "deploy": {
-    "startCommand": "cd CalSys-JS && npm install && npm run build && npm run preview"
-  }
-}
