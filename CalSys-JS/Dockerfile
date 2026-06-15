@@ -1,30 +1,27 @@
-# ── Build stage ──────────────────────────────────────────────────────────────
+# Build stage
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package*.json ./
+
 RUN npm ci
 
-COPY . .
+COPY src ./src
+COPY index.html ./
+COPY vite.config.js ./
+COPY public ./public 2>/dev/null || true
+COPY .env.production ./ 2>/dev/null || true
+
 RUN npm run build
 
-# ── Serve stage ───────────────────────────────────────────────────────────────
-FROM nginx:stable-alpine
+# Runtime stage - serve with nginx
+FROM nginx:alpine
 
-# Copy built assets
+COPY nginx.conf /etc/nginx/nginx.conf
+
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx config template (PORT is substituted at runtime via envsubst)
-COPY nginx.conf.template /etc/nginx/templates/default.conf.template
-
-# envsubst is provided by the gettext package (pre-installed in nginx:stable-alpine)
-# The official nginx image automatically processes /etc/nginx/templates/*.template
-# files via envsubst and writes the results to /etc/nginx/conf.d/ on startup.
-
-# Default to port 3000 to match Railway's expected PORT value
-ENV PORT=3000
-
-EXPOSE ${PORT}
+EXPOSE 3000
 
 CMD ["nginx", "-g", "daemon off;"]

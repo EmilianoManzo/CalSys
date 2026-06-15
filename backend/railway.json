@@ -1,16 +1,12 @@
 {
-  "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "nixpacks",
-    "buildCommand": "npm run build",
-    "startCommand": "node src/server.js"
+    "builder": "dockerfile",
+    "dockerfile": "backend/Dockerfile"
   },
   "deploy": {
     "numReplicas": 1,
     "restartPolicyMaxRetries": 10,
-    "restartPolicyWindowMs": 600000
-  },
-  "plugins": [
-    "postgres"
-  ]
+    "restartPolicyWindowMs": 600000,
+    "healthcheckPath": "/api/health"
+  }
 }
