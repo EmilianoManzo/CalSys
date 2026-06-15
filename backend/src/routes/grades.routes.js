@@ -1,7 +1,7 @@
 import express from 'express';
 import db from '../config/database.js';
-import { sendServerError } from '../middleware/security.js';
-import { validateId, validateMatricula, safeNumber, safeDivision, safeAverage } from '../utils/validation.js';
+import { sendServerError, logSecurityEvent } from '../middleware/security.js';
+import { validateId, validateMatricula, safeNumber, safeDivision, safeAverage, validateSubjectCode, validateSemesterCode } from '../utils/validation.js';
 
 const router = express.Router();
 function allowRoles(req, res, roles) {
@@ -77,12 +77,17 @@ router.get('/student-subjects', async (req, res) => {
     if (!matricula) return res.status(400).json({ error: 'Matrícula requerida' });
     const validatedMatricula = validateMatricula(matricula);
 
+    if (req.user.role === 'alumno' && req.user.matricula !== validatedMatricula) {
+      logSecurityEvent(req, 'idor_attempt', { endpoint: '/student-subjects', attempted_matricula: validatedMatricula, user_matricula: req.user.matricula });
+      return res.status(403).json({ error: 'Acceso no autorizado' });
+    }
+
     const [subjects] = await db.query(`
       SELECT DISTINCT subject_code, semester_code, group_code, teacher_id
       FROM final_grades
       WHERE student_matricula = ?
     `, [validatedMatricula]);
-    
+
     res.json({ subjects: subjects || [] });
   } catch (error) {
     console.error('Error en /student-subjects:', error);
@@ -95,9 +100,14 @@ router.get('/student-grades', async (req, res) => {
     if (!allowRoles(req, res, ['admin', 'director', 'alumno'])) return;
     const { matricula, parcialId, subjectCode } = req.query;
     if (!matricula || !parcialId || !subjectCode) return res.status(400).json({ error: 'Parámetros incompletos' });
-    
+
     const validatedMatricula = validateMatricula(matricula);
     const validatedParcialId = validateId(parcialId, 'Parcial ID');
+
+    if (req.user.role === 'alumno' && req.user.matricula !== validatedMatricula) {
+      logSecurityEvent(req, 'idor_attempt', { endpoint: '/student-grades', attempted_matricula: validatedMatricula, user_matricula: req.user.matricula });
+      return res.status(403).json({ error: 'Acceso no autorizado' });
+    }
 
     // Obtener contexto (teacher, semester, group)
     const [context] = await db.query(`
@@ -155,6 +165,11 @@ router.get('/student-final', async (req, res) => {
     const parcialId = CALIFICACION_FINAL_PARTIAL_ID;
 
     const validatedMatricula = validateMatricula(matricula);
+
+    if (req.user.role === 'alumno' && req.user.matricula !== validatedMatricula) {
+      logSecurityEvent(req, 'idor_attempt', { endpoint: '/student-final', attempted_matricula: validatedMatricula, user_matricula: req.user.matricula });
+      return res.status(403).json({ error: 'Acceso no autorizado' });
+    }
 
     // Obtener contexto
     const [context] = await db.query(`

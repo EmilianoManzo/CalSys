@@ -206,7 +206,7 @@ function GradesViewer() {
               const cellProperties = {};
               if (col === finalColIndex) {
                 cellProperties.renderer = function(instance, td, row, col, prop, value) {
-                  td.innerHTML = value !== null && value !== '' ? parseFloat(value).toFixed(2) : 'N/A';
+                  td.textContent = value !== null && value !== '' ? parseFloat(value).toFixed(2) : 'N/A';
                   td.style.fontWeight = 'bold';
                   td.style.textAlign = 'center';
                   const style = gradeStyle(value);

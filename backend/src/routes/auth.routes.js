@@ -59,7 +59,7 @@ router.post('/login', async (req, res) => {
       ...user,
       role: userRole,
       matricula: validatedRole === 'alumno' ? user.id : undefined
-    }, csrfToken);
+    });
 
     res.json({
       token,

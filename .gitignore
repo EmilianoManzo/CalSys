@@ -1,8 +1,20 @@
-node_modules/ 
-.env 
-.vite 
-dist/ 
-build/ 
+node_modules/
+.env
+.env.local
+.env.*.local
+.vite
+dist/
+build/
+
+# Backend env files
+backend/.env
+backend/.env.local
+backend/.env.*.local
+
+# Frontend env files
+CalSys-JS/.env
+CalSys-JS/.env.local
+CalSys-JS/.env.*.local
 
 # wrangler files
 .wrangler

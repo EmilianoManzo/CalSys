@@ -38,11 +38,15 @@ export const validateEmail = (email) => {
   if (!email || typeof email !== 'string') {
     throw new Error('Email es requerido');
   }
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  const normalized = email.trim().toLowerCase();
+  if (normalized.length > 254) {
+    throw new Error('Email es demasiado largo');
+  }
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  if (!emailRegex.test(normalized)) {
     throw new Error('Formato de email inválido');
   }
-  return email.trim().toLowerCase();
+  return normalized;
 };
 
 /**
@@ -150,10 +154,41 @@ export const validateRequiredParams = (params, requiredFields) => {
     const value = params[field];
     return value === null || value === undefined || value === '';
   });
-  
+
   if (missing.length > 0) {
     throw new Error(`Faltan parámetros requeridos: ${missing.join(', ')}`);
   }
-  
+
   return true;
+};
+
+/**
+ * Valida que un string no exceda una longitud máxima
+ */
+export const validateMaxLength = (value, maxLength, fieldName = 'Valor') => {
+  if (!value || typeof value !== 'string') {
+    throw new Error(`${fieldName} es requerido`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`${fieldName} no puede estar vacío`);
+  }
+  if (trimmed.length > maxLength) {
+    throw new Error(`${fieldName} no puede exceder ${maxLength} caracteres`);
+  }
+  return trimmed;
+};
+
+/**
+ * Valida código de materia (máximo 50 caracteres)
+ */
+export const validateSubjectCode = (code, max = 50) => {
+  return validateMaxLength(code, max, 'Código de materia');
+};
+
+/**
+ * Valida código de semestre (máximo 50 caracteres)
+ */
+export const validateSemesterCode = (code, max = 50) => {
+  return validateMaxLength(code, max, 'Semestre');
 };
