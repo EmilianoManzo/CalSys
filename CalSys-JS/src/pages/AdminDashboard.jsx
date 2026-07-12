@@ -112,7 +112,7 @@ function AdminDashboard() {
               alt="Justo Sierra"
               style={{ width: '26px', height: '26px', objectFit: 'cover', borderRadius: '50%', background: '#ffffff', boxShadow: '0 1px 5px rgba(0, 0, 0, 0.18)' }}
             />
-            <span style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff' }}>Calsys · Administrador</span>
+            <span style={{ fontSize: '15px', fontWeight: 600, color: '#ffffff' }}>Calsys · Director</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <span style={{ fontSize: '13px', color: '#ffffff' }}>👑 {user?.firstName} {user?.lastName}</span>

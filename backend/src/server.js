@@ -65,9 +65,9 @@ app.use('/api/auth', authRoutes);
 
 const protectedRoute = [authenticateToken, verifyOrigin, verifyCsrf, enforceScopedAccess, apiRateLimiter];
 app.use('/api/grades', protectedRoute, gradesRoutes);
-app.use('/api/columns', protectedRoute, requireRoles('admin', 'director', 'maestro'), columnsRoutes);
-app.use('/api/admin', protectedRoute, requireRoles('admin'), adminRoutes);
-app.use('/api/partials', protectedRoute, requireRoles('admin', 'director', 'maestro'), partialsRoutes);
+app.use('/api/columns', protectedRoute, requireRoles('director', 'maestro'), columnsRoutes);
+app.use('/api/admin', protectedRoute, requireRoles('director'), adminRoutes);
+app.use('/api/partials', protectedRoute, requireRoles('director', 'maestro'), partialsRoutes);
 app.use('/api/attendance', protectedRoute, attendanceRoutes);
 
 app.use((req, res) => {
