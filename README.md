@@ -79,13 +79,21 @@ CORS_ORIGIN=http://localhost:5173
 DB_HOST=localhost
 DB_USER=root
 DB_PASSWORD=
-DB_NAME=calsys_db
+DB_NAME=CalSysJS
 DB_PORT=3306
 JWT_SECRET=change-me
 JWT_EXPIRES_IN=24h
 ```
 
-El frontend usa por defecto `http://localhost:3000/api` como URL base de la API en `frontend/src/api/axios.js`.
+El frontend usa `VITE_API_URL` y, si no existe, toma `http://localhost:3000/api` como URL base de la API.
+
+Para crear la base de datos local desde MySQL Workbench, abrir y ejecutar:
+
+```text
+backend/sql/000_local_mysql_schema.sql
+```
+
+Ese script crea la base `CalSysJS`, las tablas necesarias y datos iniciales para probar el sistema.
 
 ## Instalacion y ejecucion local
 
