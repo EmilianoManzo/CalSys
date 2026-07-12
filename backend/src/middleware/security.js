@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-const ALLOWED_ROLES = new Set(['admin', 'director', 'maestro', 'alumno']);
+const ALLOWED_ROLES = new Set(['director', 'maestro', 'alumno']);
 const MAX_STRING_LENGTH = 500;
 const MAX_ARRAY_LENGTH = 1000;
 const JWT_ALGORITHM = 'HS256';
@@ -106,7 +106,8 @@ export function signAuthToken(user) {
       firstName: user.first_name,
       lastName: user.last_name,
       email: user.email,
-      matricula: user.matricula
+      matricula: user.matricula,
+      mustChangePassword: Boolean(user.must_change_password)
     },
     getJwtSecret(),
     {

@@ -11,7 +11,7 @@ const router = express.Router();
 router.get('/stats', async (req, res) => {
   try {
     const [totalStudents] = await db.query(`SELECT COUNT(*) as total FROM students WHERE status = 'active'`);
-    const [totalTeachers] = await db.query(`SELECT COUNT(*) as total FROM users WHERE role IN ('maestro', 'admin', 'director') AND status = 'active' AND is_active = 1`);
+    const [totalTeachers] = await db.query(`SELECT COUNT(*) as total FROM users WHERE role IN ('maestro', 'director') AND status = 'active' AND is_active = 1`);
     const [totalSubjects] = await db.query(`SELECT COUNT(DISTINCT subject_code) as total FROM final_grades`);
     const [totalGrades] = await db.query(`SELECT COUNT(*) as total FROM partial_grades WHERE column_name NOT IN ('__promedio', '📊 Promedio Parcial', '🎯 CALIFICACIÓN FINAL GLOBAL')`);
     
@@ -188,7 +188,7 @@ router.get('/profesores', async (req, res) => {
       const [rows] = await db.query(`
         SELECT id, username, first_name, last_name, email, role
         FROM users 
-        WHERE role IN ('maestro', 'admin')
+        WHERE role IN ('maestro', 'director')
         AND status = 'active'
         AND is_active = 1
         ORDER BY first_name, last_name
@@ -460,7 +460,7 @@ router.delete('/asignaciones', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINTS PARA CALIFICACIONES (necesarios para admin)
+// ENDPOINTS PARA CALIFICACIONES (necesarios para direccion)
 // ============================================
 router.get('/subjects', async (req, res) => {
   try {
@@ -522,7 +522,7 @@ router.get('/teachers', async (req, res) => {
     const [teachers] = await db.query(`
       SELECT id, username, first_name, last_name, email, role
       FROM users 
-      WHERE role IN ('maestro', 'admin', 'director')
+      WHERE role IN ('maestro', 'director')
       AND status = 'active'
       AND is_active = 1
       ORDER BY first_name, last_name
@@ -583,8 +583,8 @@ router.post('/students', async (req, res) => {
     }
     const passwordHash = await bcrypt.hash(password, 10);
     await db.query(`
-      INSERT INTO students (matricula, first_name, last_name, email, password_hash, phone, address, status, admission_date, group_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)
+      INSERT INTO students (matricula, first_name, last_name, email, password_hash, must_change_password, phone, address, status, admission_date, group_id)
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, CURDATE(), ?)
     `, [validatedMatricula, validatedFirstName, validatedLastName, validatedEmail, passwordHash, phone || null, address || null, validatedStatus, resolvedGroupId]);
     invalidateCache('admin:student-groups');
     res.json({ success: true, message: 'Estudiante creado exitosamente' });
@@ -612,7 +612,7 @@ router.put('/students/:matricula', async (req, res) => {
     const params = [validatedFirstName, validatedLastName, validatedEmail, dateOfBirth, phone || null, address || null, validatedStatus, resolvedGroupId];
     if (password && password.trim() !== '') {
       const passwordHash = await bcrypt.hash(password, 10);
-      query += ', password_hash = ?';
+      query += ', password_hash = ?, must_change_password = 1';
       params.push(passwordHash);
     }
     query += ' WHERE matricula = ?';
@@ -681,7 +681,7 @@ router.post('/users', async (req, res) => {
     const validatedEmail = validateEmail(email);
     const validatedFirstName = validateNonEmptyString(firstName, 'Nombre');
     const validatedLastName = validateNonEmptyString(lastName, 'Apellido');
-    const validatedRole = validateEnum(role, ['admin', 'director', 'maestro'], 'Rol');
+    const validatedRole = validateEnum(role, ['director', 'maestro'], 'Rol');
     validateNonEmptyString(password, 'Password');
     
     const [existing] = await db.query('SELECT id FROM users WHERE username = ? OR email = ?', [validatedUsername, validatedEmail]);
@@ -690,8 +690,8 @@ router.post('/users', async (req, res) => {
     }
     const passwordHash = await bcrypt.hash(password, 10);
     await db.query(`
-      INSERT INTO users (username, first_name, last_name, email, password_hash, role, phone, is_active, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+      INSERT INTO users (username, first_name, last_name, email, password_hash, must_change_password, role, phone, is_active, status)
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, 'active')
     `, [validatedUsername, validatedFirstName, validatedLastName, validatedEmail, passwordHash, validatedRole, phone || null, isActive !== false]);
     invalidateCache('admin:profesores');
     res.json({ success: true, message: 'Usuario creado' });
@@ -711,13 +711,13 @@ router.put('/users/:id', async (req, res) => {
     const validatedEmail = validateEmail(email);
     const validatedFirstName = validateNonEmptyString(firstName, 'Nombre');
     const validatedLastName = validateNonEmptyString(lastName, 'Apellido');
-    const validatedRole = validateEnum(role, ['admin', 'director', 'maestro'], 'Rol');
+    const validatedRole = validateEnum(role, ['director', 'maestro'], 'Rol');
     
     let query = 'UPDATE users SET username = ?, first_name = ?, last_name = ?, email = ?, role = ?, phone = ?, is_active = ?';
     const params = [validatedUsername, validatedFirstName, validatedLastName, validatedEmail, validatedRole, phone || null, isActive !== false];
     if (password && password.trim() !== '') {
       const passwordHash = await bcrypt.hash(password, 10);
-      query += ', password_hash = ?';
+      query += ', password_hash = ?, must_change_password = 1';
       params.push(passwordHash);
     }
     query += ' WHERE id = ?';
@@ -738,9 +738,6 @@ router.delete('/users/:id', async (req, res) => {
     const [user] = await db.query('SELECT id, role FROM users WHERE id = ?', [validatedId]);
     if (!user || user.length === 0) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-    if (user[0].role === 'admin') {
-      return res.status(400).json({ error: 'No se puede eliminar un usuario administrador desde aquí' });
     }
 
     if (!permanent) {
@@ -770,3 +767,4 @@ router.delete('/users/:id', async (req, res) => {
 });
 
 export default router;
+

@@ -37,10 +37,25 @@ export const AuthProvider = ({ children }) => {
       sessionStorage.setItem('csrfToken', csrfToken);
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(userData);
-      return { success: true, role: userData.role };
+      return { success: true, role: userData.role, mustChangePassword: userData.mustChangePassword };
     } catch (error) {
       console.error('Login error:', error);
       return { success: false, error: error.response?.data?.error || 'Error al iniciar sesión' };
+    }
+  };
+
+  const changePassword = async (currentPassword, newPassword, confirmPassword) => {
+    try {
+      const response = await api.post('/auth/change-password', { currentPassword, newPassword, confirmPassword });
+      const { token, csrfToken, user: userData } = response.data;
+      sessionStorage.setItem('token', token);
+      sessionStorage.setItem('csrfToken', csrfToken);
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setUser(userData);
+      return { success: true, role: userData.role };
+    } catch (error) {
+      console.error('Change password error:', error);
+      return { success: false, error: error.response?.data?.error || 'Error al cambiar contrasena' };
     }
   };
 
@@ -52,7 +67,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, changePassword, logout }}>
       {children}
     </AuthContext.Provider>
   );

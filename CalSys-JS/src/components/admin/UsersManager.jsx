@@ -23,7 +23,7 @@ function UsersManager() {
       const response = await api.get('/admin/users');
       const data = response.data.users.map(u => [
         u.id, u.username, u.first_name, u.last_name, u.email,
-        u.role === 'maestro' ? '👨‍🏫 Maestro' : u.role === 'admin' ? '👑 Admin' : '📋 Director',
+        u.role === 'maestro' ? 'Maestro' : 'Director',
         u.is_active ? 'Activo' : 'Inactivo'
       ]);
       setUsers(data);
@@ -138,7 +138,7 @@ function UsersManager() {
                 <div><label style={{ fontSize: '12px', fontWeight: 500, display: 'block', marginBottom: '4px' }}>Rol *</label>
                   <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}
                     style={{ width: '100%', border: '0.5px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '13px' }}>
-                    <option value="maestro">Maestro</option><option value="director">Director</option><option value="admin">Administrador</option>
+                    <option value="maestro">Maestro</option><option value="director">Director</option>
                   </select></div>
                 <div><label style={{ fontSize: '12px', fontWeight: 500, display: 'block', marginBottom: '4px' }}>Teléfono</label>
                   <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})}

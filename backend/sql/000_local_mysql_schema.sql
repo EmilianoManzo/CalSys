@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS users (
   last_name VARCHAR(100) NOT NULL,
   email VARCHAR(191) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  role ENUM('admin', 'director', 'maestro') NOT NULL DEFAULT 'maestro',
+  must_change_password TINYINT(1) NOT NULL DEFAULT 1,
+  role ENUM('director', 'maestro') NOT NULL DEFAULT 'maestro',
   phone VARCHAR(30) NULL,
   status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
   is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS students (
   last_name VARCHAR(100) NOT NULL,
   email VARCHAR(191) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
+  must_change_password TINYINT(1) NOT NULL DEFAULT 1,
   date_of_birth DATE NULL,
   phone VARCHAR(30) NULL,
   address VARCHAR(255) NULL,
@@ -239,11 +241,10 @@ CREATE TABLE IF NOT EXISTS attendance_records (
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- Starter password for all seed users: admin123
-INSERT INTO users (username, first_name, last_name, email, password_hash, role, phone, status, is_active)
+INSERT INTO users (username, first_name, last_name, email, password_hash, must_change_password, role, phone, status, is_active)
 VALUES
-  ('admin', 'Admin', 'Local', 'admin@calsys.local', '$2a$10$XiLwhBq2nh7Xcry/RUjf2uTaoAaNxpDCdUWkUDfkdL3kyO4r35EI2', 'admin', NULL, 'active', 1),
-  ('maestro', 'Maestro', 'Local', 'maestro@calsys.local', '$2a$10$XiLwhBq2nh7Xcry/RUjf2uTaoAaNxpDCdUWkUDfkdL3kyO4r35EI2', 'maestro', NULL, 'active', 1),
-  ('director', 'Director', 'Local', 'director@calsys.local', '$2a$10$XiLwhBq2nh7Xcry/RUjf2uTaoAaNxpDCdUWkUDfkdL3kyO4r35EI2', 'director', NULL, 'active', 1)
+  ('maestro', 'Maestro', 'Local', 'maestro@calsys.local', '$2a$10$XiLwhBq2nh7Xcry/RUjf2uTaoAaNxpDCdUWkUDfkdL3kyO4r35EI2', 1, 'maestro', NULL, 'active', 1),
+  ('director', 'Director', 'Local', 'director@calsys.local', '$2a$10$XiLwhBq2nh7Xcry/RUjf2uTaoAaNxpDCdUWkUDfkdL3kyO4r35EI2', 1, 'director', NULL, 'active', 1)
 ON DUPLICATE KEY UPDATE
   first_name = VALUES(first_name),
   last_name = VALUES(last_name),
@@ -259,10 +260,10 @@ INSERT INTO materias (subject_code, subject_name, credits, description)
 VALUES ('MAT101', 'Matematicas', 5, 'Materia local de prueba')
 ON DUPLICATE KEY UPDATE subject_name = VALUES(subject_name), credits = VALUES(credits), description = VALUES(description);
 
-INSERT INTO students (matricula, first_name, last_name, email, password_hash, status, admission_date, group_id)
+INSERT INTO students (matricula, first_name, last_name, email, password_hash, must_change_password, status, admission_date, group_id)
 SELECT 'A001', 'Alumno', 'Local', 'alumno@calsys.local',
        '$2a$10$XiLwhBq2nh7Xcry/RUjf2uTaoAaNxpDCdUWkUDfkdL3kyO4r35EI2',
-       'active', CURDATE(), sg.id
+       1, 'active', CURDATE(), sg.id
 FROM student_groups sg
 WHERE sg.group_code = '1A'
 ON DUPLICATE KEY UPDATE

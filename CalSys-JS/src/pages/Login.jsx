@@ -3,8 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import justoSierraLogo from '../assets/justo-sierra-logo-transparent.png';
 
-const roles = ['alumno', 'maestro', 'admin'];
-const roleLabels = { alumno: 'Alumno', maestro: 'Maestro', admin: 'Director' };
+const roles = ['alumno', 'maestro', 'director'];
+const roleLabels = { alumno: 'Alumno', maestro: 'Maestro', director: 'Director' };
 
 function Login() {
   const [username, setUsername] = useState('');
@@ -24,7 +24,7 @@ function Login() {
     if (result.success) {
       if (result.role === 'alumno') navigate('/alumno');
       else if (result.role === 'maestro') navigate('/maestro');
-      else if (result.role === 'admin') navigate('/admin');
+      else if (result.role === 'director') navigate('/admin');
     } else {
       setError(result.error);
     }
