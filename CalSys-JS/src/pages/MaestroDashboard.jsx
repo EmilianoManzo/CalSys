@@ -252,6 +252,58 @@ function MaestroDashboard() {
         .maestro-partial-container > * {
           width: 100%;
         }
+
+        @media (max-width: 768px) {
+          .maestro-nav {
+            min-height: 52px;
+            height: auto;
+            padding: 8px 12px;
+            gap: 10px;
+          }
+
+          .maestro-nav-title {
+            font-size: 14px;
+          }
+
+          .maestro-nav-right {
+            gap: 8px;
+          }
+
+          .maestro-nav-user {
+            display: none;
+          }
+
+          .maestro-nav-btn {
+            min-height: 36px;
+            padding: 7px 12px;
+          }
+
+          .maestro-main-content {
+            padding: 12px;
+          }
+
+          .maestro-filters-card,
+          .maestro-partial-container {
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 12px;
+          }
+
+          .maestro-filters-title {
+            margin-bottom: 12px;
+            font-size: 16px;
+          }
+
+          .maestro-grid {
+            grid-template-columns: 1fr;
+            gap: 12px;
+          }
+
+          .maestro-select {
+            min-height: 42px;
+            font-size: 14px;
+          }
+        }
       `}</style>
 
       <div className="maestro-wrapper">

@@ -68,6 +68,32 @@ function PartialManager({ semester, subject, group, teacherId }) {
           border-radius: 8px;
           padding: 0;
         }
+
+        @media (max-width: 768px) {
+          .pm-tabs {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            gap: 8px;
+            margin: 0 -14px 14px;
+            padding: 0 14px 12px;
+            scrollbar-width: none;
+          }
+
+          .pm-tabs::-webkit-scrollbar {
+            display: none;
+          }
+
+          .pm-tab {
+            flex: 0 0 auto;
+            min-height: 40px;
+            padding: 8px 12px;
+            white-space: nowrap;
+          }
+
+          .pm-content {
+            border-radius: 0;
+          }
+        }
       `}</style>
 
       <div className="pm-wrapper">

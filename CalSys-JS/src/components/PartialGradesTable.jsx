@@ -4,6 +4,8 @@ import { registerAllModules } from 'handsontable/registry';
 import 'handsontable/dist/handsontable.full.min.css';
 import api from '../api/axios';
 import ColumnConfig from './ColumnConfig';
+import { gradeStyle } from '../theme';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 registerAllModules();
 
@@ -16,8 +18,11 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [dirtyCells, setDirtyCells] = useState({});
+  const [invalidCells, setInvalidCells] = useState({});
   const hotRef = useRef(null);
   const isUpdating = useRef(false);
+  const isMobile = useIsMobile();
   const isCalificacionFinalTab = partialId === CALIFICACION_FINAL_PARTIAL_ID;
 
   const safeColumns = () => (Array.isArray(columns) ? columns.filter(c => c && typeof c === 'object') : []);
@@ -36,6 +41,8 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
       if (!Array.isArray(cols)) cols = [];
       const valid = cols.filter(c => c && typeof c === 'object');
       setColumns(valid);
+      setDirtyCells({});
+      setInvalidCells({});
       await loadGrades();
     } catch (error) {
       console.error(error);
@@ -84,6 +91,56 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
     return peso > 0 ? parseFloat(total.toFixed(2)) : null;
   };
 
+  const isEditableColumn = (col) => {
+    const isSpecialReadonly = isCalificacionFinalTab && !!col.is_special;
+    return !isSpecialReadonly && !col.is_virtual;
+  };
+
+  const getRowFinalGrade = (row) => {
+    const nota = calcularNotaFinal(row, safeColumns());
+    return nota !== null ? nota.toFixed(2) : '';
+  };
+
+  const buildSaveValues = (tableData) => {
+    const values = [];
+    const safe = safeColumns();
+    for (let rowIdx = 0; rowIdx < tableData.length; rowIdx++) {
+      const row = tableData[rowIdx];
+      const matricula = row[0];
+      for (let colIdx = 0; colIdx < safe.length; colIdx++) {
+        const col = safe[colIdx];
+        if (!isEditableColumn(col)) continue;
+        const val = row[2 + colIdx];
+        const valueToStore = (val !== '' && !isNaN(parseFloat(val))) ? val.toString() : null;
+        values.push({ matricula, columnName: col.column_name, value: valueToStore });
+      }
+    }
+    return values;
+  };
+
+  const handleMobileGradeChange = (rowIdx, colIdx, rawValue) => {
+    const col = safeColumns()[colIdx];
+    const cellKey = `${rowIdx}-${colIdx}`;
+    const max = parseFloat(col.max_value) || 10;
+    const parsed = parseFloat(rawValue);
+    const isValid = rawValue === '' || (!isNaN(parsed) && parsed >= 0 && parsed <= max);
+
+    setData(prev => prev.map((row, idx) => {
+      if (idx !== rowIdx) return row;
+      const next = [...row];
+      next[2 + colIdx] = rawValue;
+      return next;
+    }));
+
+    setDirtyCells(prev => ({ ...prev, [cellKey]: true }));
+    setInvalidCells(prev => {
+      const next = { ...prev };
+      if (isValid) delete next[cellKey];
+      else next[cellKey] = true;
+      return next;
+    });
+  };
+
   const afterChange = (changes, source) => {
     if (isCalificacionFinalTab) return;
     if (!changes || source === 'loadData' || source === 'autoFinal') return;
@@ -128,26 +185,19 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
   };
 
   const handleSaveGrades = async () => {
+    if (Object.keys(invalidCells).length > 0) {
+      alert('Corrige las calificaciones marcadas en rojo antes de guardar');
+      return;
+    }
     setSaving(true);
     try {
-      const hot = hotRef.current.hotInstance;
-      const tableData = hot.getData();
-      const values = [];
-      const safe = safeColumns();
-      for (let rowIdx = 0; rowIdx < tableData.length; rowIdx++) {
-        const row = tableData[rowIdx];
-        const matricula = row[0];
-        for (let colIdx = 0; colIdx < safe.length; colIdx++) {
-          const col = safe[colIdx];
-          if (isCalificacionFinalTab && col.is_special) continue;
-          if (col.is_virtual) continue;
-          const val = row[2 + colIdx];
-          const valueToStore = (val !== '' && !isNaN(parseFloat(val))) ? val.toString() : null;
-          values.push({ matricula, columnName: col.column_name, value: valueToStore });
-        }
-      }
+      const hot = hotRef.current?.hotInstance;
+      const tableData = hot && !isMobile ? hot.getData() : data;
+      const values = buildSaveValues(tableData);
       await api.post('/partials/save-grades', { teacherId, semester, subject, group, partialId, values });
       alert('Calificaciones guardadas exitosamente');
+      setDirtyCells({});
+      setInvalidCells({});
       await loadConfig();
     } catch (error) {
       console.error(error);
@@ -164,16 +214,15 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
     ];
     const safe = safeColumns();
     safe.forEach((col, idx) => {
-      const isSpecialReadonly = isCalificacionFinalTab && !!col.is_special;
       base.push({
         data: 2 + idx,
         title: `${col.column_name}${col.is_special ? ' ⭐' : ''}`,
         type: 'numeric',
         numericFormat: { pattern: '0.00' },
         width: 140,
-        readOnly: isSpecialReadonly || !!col.is_virtual,
+        readOnly: !isEditableColumn(col),
         validator: (value, callback) => {
-          if (isSpecialReadonly || col.is_virtual) {
+          if (!isEditableColumn(col)) {
             callback(true);
             return;
           }
@@ -252,6 +301,18 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
   );
 
   const partialName = partialId === 1 ? 'Primer Parcial' : partialId === 2 ? 'Segundo Parcial' : partialId === 3 ? 'Tercer Parcial' : partialId === 4 ? 'Examen Final' : 'Calificación Final';
+  const safe = safeColumns();
+  const dirtyCount = Object.keys(dirtyCells).length;
+  const invalidCount = Object.keys(invalidCells).length;
+  const renderGradeBadge = (value) => {
+    const style = gradeStyle(value);
+    const soft = style.soft || { bg: '#fef3c7', text: '#92400e' };
+    return (
+      <span className="mobile-grade-badge" style={{ background: soft.bg, color: soft.text }}>
+        {value !== '' ? value : 'N/A'}
+      </span>
+    );
+  };
 
   return (
     <>
@@ -362,9 +423,242 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
           text-align: center !important;
           border-right: 1px solid #e5e7eb !important;
         }
+
+        .mobile-grades-list {
+          display: grid;
+          gap: 12px;
+          padding-bottom: 84px;
+        }
+
+        .mobile-student-card {
+          background: #ffffff;
+          border: 0.5px solid #e5e7eb;
+          border-radius: 16px;
+          padding: 14px;
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+
+        .mobile-student-card-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          padding-bottom: 12px;
+          border-bottom: 0.5px solid #e5e7eb;
+          margin-bottom: 12px;
+        }
+
+        .mobile-student-name {
+          color: #111111;
+          font-size: 15px;
+          font-weight: 700;
+          line-height: 1.25;
+        }
+
+        .mobile-student-id {
+          color: #9ca3af;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          margin-top: 4px;
+          text-transform: uppercase;
+        }
+
+        .mobile-grade-badge {
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 54px;
+          min-height: 30px;
+          padding: 5px 10px;
+          font-size: 13px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        .mobile-activity-row {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 96px;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 0;
+        }
+
+        .mobile-activity-row + .mobile-activity-row {
+          border-top: 0.5px solid #f0f0f0;
+        }
+
+        .mobile-activity-name {
+          color: #111111;
+          font-size: 13px;
+          font-weight: 600;
+          line-height: 1.25;
+          overflow-wrap: anywhere;
+        }
+
+        .mobile-activity-meta {
+          color: #9ca3af;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          margin-top: 3px;
+          text-transform: uppercase;
+        }
+
+        .mobile-grade-input {
+          width: 96px;
+          min-height: 40px;
+          background: #fafafa;
+          border: 0.5px solid #e5e7eb;
+          border-radius: 10px;
+          color: #111111;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 14px;
+          font-weight: 600;
+          outline: none;
+          padding: 8px 10px;
+          text-align: right;
+        }
+
+        .mobile-grade-input:focus {
+          background: #ffffff;
+          border: 2px solid #880000;
+          box-shadow: 0 0 0 2px rgba(136, 0, 0, 0.1);
+        }
+
+        .mobile-grade-input-invalid {
+          background: #fef2f2;
+          border-color: #dc2626;
+          color: #991b1b;
+        }
+
+        .mobile-grade-input-readonly {
+          background: #f9fafb;
+          color: #6b7280;
+        }
+
+        .mobile-save-bar {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 30;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+          background: rgba(255, 255, 255, 0.96);
+          border-top: 0.5px solid #e5e7eb;
+          box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+        }
+
+        .mobile-save-copy {
+          color: #4b5563;
+          font-size: 12px;
+          font-weight: 600;
+          line-height: 1.25;
+        }
+
+        .mobile-save-copy strong {
+          color: #111111;
+          display: block;
+          font-size: 13px;
+        }
+
+        .mobile-save-btn {
+          min-height: 42px;
+          background: #880000;
+          border: none;
+          border-radius: 10px;
+          color: #ffffff;
+          cursor: pointer;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          font-weight: 700;
+          padding: 10px 18px;
+          white-space: nowrap;
+        }
+
+        .mobile-save-btn:disabled {
+          background: #9ca3af;
+          cursor: not-allowed;
+          opacity: 0.75;
+        }
       `}</style>
 
       <div style={{ fontFamily: 'DM Sans, sans-serif' }}>
+        {isMobile ? (
+          <>
+            {safe.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#9ca3af' }}>
+                No hay actividades configuradas para esta evaluacion.
+              </div>
+            ) : (
+              <div className="mobile-grades-list">
+                {data.map((row, rowIdx) => {
+                  const finalGrade = getRowFinalGrade(row);
+                  return (
+                    <article className="mobile-student-card" key={row[0] || rowIdx}>
+                      <header className="mobile-student-card-header">
+                        <div>
+                          <div className="mobile-student-name">{row[1]}</div>
+                          <div className="mobile-student-id">{row[0]}</div>
+                        </div>
+                        {renderGradeBadge(finalGrade)}
+                      </header>
+
+                      {safe.map((col, colIdx) => {
+                        const cellKey = `${rowIdx}-${colIdx}`;
+                        const editable = isEditableColumn(col);
+                        const value = row[2 + colIdx] ?? '';
+                        return (
+                          <div className="mobile-activity-row" key={col.column_name}>
+                            <div>
+                              <div className="mobile-activity-name">
+                                {col.column_name}{col.is_special ? ' *' : ''}
+                              </div>
+                              <div className="mobile-activity-meta">
+                                {parseFloat(col.weight) || 0}% / max {parseFloat(col.max_value) || 10}
+                              </div>
+                            </div>
+                            <input
+                              className={`mobile-grade-input ${invalidCells[cellKey] ? 'mobile-grade-input-invalid' : ''} ${!editable ? 'mobile-grade-input-readonly' : ''}`}
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              max={parseFloat(col.max_value) || 10}
+                              step="0.01"
+                              value={value}
+                              disabled={!editable}
+                              onChange={(e) => handleMobileGradeChange(rowIdx, colIdx, e.target.value)}
+                            />
+                          </div>
+                        );
+                      })}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="mobile-save-bar">
+              <div className="mobile-save-copy">
+                <strong>{invalidCount > 0 ? `${invalidCount} valores invalidos` : `${dirtyCount} cambios sin guardar`}</strong>
+                {invalidCount > 0 ? 'Corrige los campos rojos' : 'Se guardan en un solo envio'}
+              </div>
+              <button
+                className="mobile-save-btn"
+                onClick={handleSaveGrades}
+                disabled={saving || invalidCount > 0 || dirtyCount === 0}
+              >
+                {saving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
         <div style={{
           marginBottom: '1.5rem',
           display: 'flex',
@@ -434,7 +728,7 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
               Configurar
             </button>
             
-            <button 
+            {!isMobile && <button 
               onClick={handleSaveGrades} 
               disabled={saving} 
               style={{
@@ -479,7 +773,7 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
                   Guardar
                 </>
               )}
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -623,6 +917,8 @@ function PartialGradesTable({ partialId, semester, subject, group, teacherId, sh
             </span>
           </div>
         </div>
+          </>
+        )}
       </div>
     </>
   );
